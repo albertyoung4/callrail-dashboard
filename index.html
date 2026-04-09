@@ -161,9 +161,11 @@ let currentPage = 1;
 let selectedCallId = null;
 let minDuration = 120;
 
-function extractAgentName(transcript) {
-  if (!transcript) return '';
-  const m = transcript.match(/(?:this is|my name is|i'm|i am)\s+([A-Z][a-z]+)/i);
+function extractAgentName(call) {
+  // Prefer Five9 agent_name, fall back to transcript extraction
+  if (call.agent_name) return call.agent_name;
+  if (!call.transcript) return '';
+  const m = call.transcript.match(/(?:this is|my name is|i'm|i am)\s+([A-Z][a-z]+)/i);
   if (m && !['Business','Thank','This','Your','An'].includes(m[1])) return m[1];
   return '';
 }
@@ -172,7 +174,7 @@ async function init() {
   try {
     const res = await fetch('calls.json');
     const data = await res.json();
-    allCalls = data.calls.map(c => ({ ...c, agent_name: extractAgentName(c.transcript) }));
+    allCalls = data.calls.map(c => ({ ...c, agent_name: extractAgentName(c) }));
     applyFilters();
   } catch (e) {
     document.getElementById('callList').innerHTML = '<div class="loading" style="color:var(--red)">Failed to load calls.json — run: node fetch-calls.js</div>';
