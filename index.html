@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rebuilt — Call Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232733;
+    --border: #2e3345;
+    --text: #e4e6ed;
+    --text2: #8b90a0;
+    --accent: #4f8cff;
+    --accent2: #3b6fcc;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --orange: #f97316;
+    --red: #ef4444;
+    --purple: #a78bfa;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; font-size:14px; }
+
+  /* Header */
+  .header { background:var(--surface); border-bottom:1px solid var(--border); padding:16px 24px; display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:100; }
+  .header h1 { font-size:18px; font-weight:700; white-space:nowrap; }
+  .header h1 span { color:var(--accent); }
+  .search-box { flex:1; max-width:500px; position:relative; }
+  .search-box input { width:100%; padding:10px 14px 10px 38px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; outline:none; transition:border-color .2s; }
+  .search-box input:focus { border-color:var(--accent); }
+  .search-box svg { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text2); }
+  .stats { color:var(--text2); font-size:13px; white-space:nowrap; }
+  .stats b { color:var(--text); }
+
+  /* Main layout */
+  .container { display:flex; height:calc(100vh - 57px); }
+  .list-panel { width:420px; min-width:320px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+  .detail-panel { flex:1; display:flex; overflow:hidden; }
+  .detail-panel.empty { align-items:center; justify-content:center; }
+  .empty-state { text-align:center; color:var(--text2); }
+  .empty-state svg { margin-bottom:12px; opacity:.4; }
+  .empty-state p { font-size:15px; }
+
+  /* Call list */
+  .call-list { flex:1; overflow-y:auto; }
+  .call-item { padding:14px 18px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .15s; }
+  .call-item:hover { background:var(--surface2); }
+  .call-item.active { background:var(--surface2); border-left:3px solid var(--accent); padding-left:15px; }
+  .call-item .name { font-weight:600; font-size:14px; margin-bottom:2px; }
+  .call-item .phone { color:var(--accent); font-size:13px; font-family:'SF Mono',Monaco,monospace; }
+  .call-item .meta { display:flex; gap:12px; margin-top:6px; color:var(--text2); font-size:12px; }
+  .call-item .meta .duration { color:var(--green); }
+  .call-item .meta .source { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .call-item .lead-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:600; margin-left:8px; }
+
+  /* Pagination */
+  .pagination { display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border-top:1px solid var(--border); background:var(--surface); }
+  .pagination button { padding:6px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text); cursor:pointer; font-size:13px; }
+  .pagination button:hover:not(:disabled) { background:var(--accent2); border-color:var(--accent); }
+  .pagination button:disabled { opacity:.3; cursor:default; }
+  .pagination span { color:var(--text2); font-size:13px; }
+
+  /* Detail panels */
+  .transcript-panel, .analysis-panel { flex:1; overflow-y:auto; padding:24px; }
+  .transcript-panel { border-right:1px solid var(--border); }
+
+  .detail-header { margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid var(--border); }
+  .detail-header h2 { font-size:18px; margin-bottom:4px; }
+  .detail-header .detail-meta { display:flex; flex-wrap:wrap; gap:16px; color:var(--text2); font-size:13px; margin-top:8px; }
+  .detail-header .detail-meta span { display:flex; align-items:center; gap:4px; }
+
+  /* Transcript */
+  .transcript-line { margin-bottom:12px; line-height:1.6; }
+  .transcript-line .speaker { font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:2px; }
+  .transcript-line .speaker.agent { color:var(--accent); }
+  .transcript-line .speaker.caller { color:var(--green); }
+  .transcript-line .text { color:var(--text); padding-left:12px; border-left:2px solid var(--border); }
+
+  /* Analysis */
+  .grade-ring { width:100px; height:100px; margin:0 auto 20px; position:relative; }
+  .grade-ring svg { transform:rotate(-90deg); }
+  .grade-ring .grade-label { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:32px; font-weight:800; }
+  .grade-ring .grade-score { position:absolute; bottom:-4px; left:50%; transform:translateX(-50%); font-size:12px; color:var(--text2); }
+
+  .analysis-section { margin-bottom:20px; }
+  .analysis-section h3 { font-size:14px; font-weight:600; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+  .analysis-section h3 .score-pill { padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+
+  .feedback-item { padding:8px 12px; margin-bottom:6px; border-radius:6px; font-size:13px; line-height:1.5; }
+  .feedback-item.positive { background:rgba(52,211,153,.08); border-left:3px solid var(--green); color:var(--green); }
+  .feedback-item.negative { background:rgba(239,68,68,.08); border-left:3px solid var(--red); color:var(--red); }
+  .feedback-item.warning { background:rgba(251,191,36,.08); border-left:3px solid var(--yellow); color:var(--yellow); }
+
+  .summary-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:20px; font-size:13px; line-height:1.6; color:var(--text2); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:6px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--text2); }
+
+  /* Loading */
+  .loading { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text2); }
+  .spinner { width:24px; height:24px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; margin-right:12px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  @media (max-width:900px) {
+    .list-panel { width:100%; }
+    .container { flex-direction:column; }
+    .detail-panel { flex-direction:column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Rebuilt <span>Call Dashboard</span></h1>
+  <div class="search-box">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    <input type="text" id="searchInput" placeholder="Search by name or phone number...">
+  </div>
+  <div class="stats" id="stats"></div>
+</div>
+
+<div class="container">
+  <div class="list-panel">
+    <div class="call-list" id="callList">
+      <div class="loading"><div class="spinner"></div>Loading calls...</div>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+  <div class="detail-panel empty" id="detailPanel">
+    <div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.05 5A5 5 0 0119 8.95M15.05 1A9 9 0 0123 8.94M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+      <p>Select a call to view transcript & analysis</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const PER_PAGE = 25;
+let allCalls = [];
+let filteredCalls = [];
+let currentPage = 1;
+let selectedCallId = null;
+
+async function init() {
+  try {
+    const res = await fetch('calls.json');
+    const data = await res.json();
+    allCalls = data.calls;
+    filteredCalls = allCalls;
+    updateStats();
+    renderList();
+    renderPagination();
+  } catch (e) {
+    document.getElementById('callList').innerHTML = '<div class="loading" style="color:var(--red)">Failed to load calls.json — run: node fetch-calls.js</div>';
+  }
+}
+
+function updateStats() {
+  document.getElementById('stats').innerHTML = `Showing <b>${filteredCalls.length}</b> of <b>${allCalls.length}</b> calls with transcripts`;
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) + ' ' +
+         d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+}
+
+function formatPhone(p) {
+  if (!p) return '';
+  const n = p.replace(/\D/g,'').slice(-10);
+  return `(${n.slice(0,3)}) ${n.slice(3,6)}-${n.slice(6)}`;
+}
+
+function formatDuration(s) {
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s/60), sec = s%60;
+  return sec ? `${m}m ${sec}s` : `${m}m`;
+}
+
+function leadColor(score) {
+  if (!score) return '';
+  const s = parseInt(score);
+  if (s >= 70) return 'var(--green)';
+  if (s >= 40) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+// Search
+document.getElementById('searchInput').addEventListener('input', function() {
+  const q = this.value.toLowerCase().replace(/[\s\-\(\)]/g,'');
+  if (!q) { filteredCalls = allCalls; }
+  else {
+    filteredCalls = allCalls.filter(c => {
+      const name = (c.customer_name||'').toLowerCase();
+      const phone = (c.customer_phone||'').replace(/\D/g,'');
+      return name.includes(q) || phone.includes(q);
+    });
+  }
+  currentPage = 1;
+  updateStats();
+  renderList();
+  renderPagination();
+});
+
+function renderList() {
+  const start = (currentPage-1)*PER_PAGE;
+  const page = filteredCalls.slice(start, start+PER_PAGE);
+  const list = document.getElementById('callList');
+
+  if (page.length === 0) {
+    list.innerHTML = '<div class="loading">No calls found</div>';
+    return;
+  }
+
+  list.innerHTML = page.map(c => `
+    <div class="call-item ${c.id === selectedCallId ? 'active' : ''}" data-id="${c.id}">
+      <div class="name">${c.customer_name || 'Unknown'}
+        ${c.lead_score ? `<span class="lead-badge" style="background:${leadColor(c.lead_score)}22;color:${leadColor(c.lead_score)}">${c.lead_score}</span>` : ''}
+      </div>
+      <div class="phone">${formatPhone(c.customer_phone)}</div>
+      <div class="meta">
+        <span>${formatDate(c.start_time)}</span>
+        <span class="duration">${formatDuration(c.duration)}</span>
+        <span class="source" title="${c.source||''}">${(c.source||'').split(' - ').slice(-2).join(' - ')}</span>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.call-item').forEach(el => {
+    el.addEventListener('click', () => selectCall(el.dataset.id));
+  });
+}
+
+function renderPagination() {
+  const totalPages = Math.ceil(filteredCalls.length / PER_PAGE);
+  const pag = document.getElementById('pagination');
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+  pag.innerHTML = `
+    <button ${currentPage<=1?'disabled':''} onclick="goPage(${currentPage-1})">Prev</button>
+    <span>Page ${currentPage} of ${totalPages}</span>
+    <button ${currentPage>=totalPages?'disabled':''} onclick="goPage(${currentPage+1})">Next</button>
+  `;
+}
+
+function goPage(p) {
+  currentPage = p;
+  renderList();
+  renderPagination();
+  document.getElementById('callList').scrollTop = 0;
+}
+
+function selectCall(id) {
+  selectedCallId = id;
+  const call = allCalls.find(c => c.id === id);
+  if (!call) return;
+  renderList();
+  renderDetail(call);
+}
+
+function parseTranscript(raw) {
+  const lines = [];
+  const regex = /(Agent|Caller):\s*/gi;
+  let match, lastIdx = 0, lastSpeaker = null;
+  const text = raw.replace(/\n/g,' ');
+  while ((match = regex.exec(text)) !== null) {
+    if (lastSpeaker !== null) {
+      lines.push({ speaker: lastSpeaker, text: text.slice(lastIdx, match.index).trim() });
+    }
+    lastSpeaker = match[1];
+    lastIdx = match.index + match[0].length;
+  }
+  if (lastSpeaker) lines.push({ speaker: lastSpeaker, text: text.slice(lastIdx).trim() });
+  return lines;
+}
+
+function analyzeCall(call) {
+  const t = (call.transcript || '').toLowerCase();
+  const lines = parseTranscript(call.transcript || '');
+  const agentLines = lines.filter(l => l.speaker.toLowerCase() === 'agent');
+  const callerLines = lines.filter(l => l.speaker.toLowerCase() === 'caller');
+  const agentText = agentLines.map(l => l.text).join(' ').toLowerCase();
+  const callerText = callerLines.map(l => l.text).join(' ').toLowerCase();
+
+  const categories = [];
+
+  // 1. RAPPORT BUILDING (15 pts)
+  let rapport = { name:'Rapport Building', max:15, score:0, good:[], bad:[] };
+  if (/how.*(long|are you|doing|going)|where.*(from|you)|that's (great|awesome|lovely|nice|wonderful)/.test(agentText)) { rapport.score += 5; rapport.good.push('Built personal connection with small talk'); }
+  else { rapport.bad.push('Missed opportunity to build rapport with small talk'); }
+  if (/sorry|condolence|appreciate|thank you for (calling|sharing|your time)/.test(agentText)) { rapport.score += 5; rapport.good.push('Showed empathy and appreciation'); }
+  else { rapport.bad.push('Could show more empathy and appreciation'); }
+  if (/name|first name|call you/.test(agentText)) { rapport.score += 5; rapport.good.push('Confirmed the caller\'s name'); }
+  else { rapport.bad.push('Didn\'t confirm or use the caller\'s name'); }
+  categories.push(rapport);
+
+  // 2. MOTIVATION & PAIN DISCOVERY (20 pts)
+  let motivation = { name:'Motivation & Pain Discovery', max:20, score:0, good:[], bad:[] };
+  if (/why.*(sell|move|let.*go)|what.*(reason|situation|going on)|motivation/.test(agentText)) { motivation.score += 7; motivation.good.push('Asked about seller\'s motivation'); }
+  else if (/sell|interested|looking to/.test(callerText)) { motivation.score += 3; motivation.bad.push('Seller volunteered motivation but agent didn\'t dig deeper into the WHY'); }
+  else { motivation.bad.push('Never uncovered seller\'s motivation — critical for pricing leverage'); }
+  if (/how long.*(own|lived|had)|when.*(buy|purchase|acquire)/.test(agentText)) { motivation.score += 5; motivation.good.push('Asked about ownership history'); }
+  if (/behind on|mortgage|owe|payoff|pay off|lien|tax/.test(agentText)) { motivation.score += 4; motivation.good.push('Probed financial situation'); }
+  else if (/owe|mortgage/.test(callerText)) { motivation.score += 2; motivation.bad.push('Seller mentioned debt/mortgage — agent should probe further'); }
+  else { motivation.bad.push('Didn\'t ask about mortgage balance or liens'); }
+  if (/timeline|when.*close|how soon|rush|urgent|deadline/.test(agentText)) { motivation.score += 4; motivation.good.push('Asked about timeline/urgency'); }
+  else { motivation.bad.push('Never established a timeline — crucial for urgency-based pricing'); }
+  categories.push(motivation);
+
+  // 3. PROPERTY QUALIFICATION (15 pts)
+  let property = { name:'Property Qualification', max:15, score:0, good:[], bad:[] };
+  if (/condition|repair|roof|foundation|hvac|heat|plumbing|leak|damage|collaps/.test(agentText)) { property.score += 5; property.good.push('Asked about property condition'); }
+  else { property.bad.push('Didn\'t ask about property condition'); }
+  if (/bedroom|bathroom|squar|sq.*ft|size|how big/.test(agentText)) { property.score += 3; property.good.push('Gathered property specs'); }
+  if (/tenant|rent|lease|occupied|vacant/.test(agentText)) { property.score += 4; property.good.push('Asked about tenant/occupancy status'); }
+  if (/lot|land|acre|manufactur|mobile|year.*built|built in/.test(agentText)) { property.score += 3; property.good.push('Covered lot/land and property type details'); }
+  categories.push(property);
+
+  // 4. PRICE ANCHORING & NEGOTIATION (25 pts — most important)
+  let pricing = { name:'Price Anchoring & Negotiation', max:25, score:0, good:[], bad:[] };
+  // Did agent let seller state price first?
+  const agentPriceFirst = /\b\d{2,3}(,\d{3})?\b/.test(agentText.split(callerText[0]||'xxx')[0] || '');
+  if (/what.*(looking for|want|expect|ballpark|range|number)|ideal.*price|what.*worth.*to you/.test(agentText)) { pricing.score += 8; pricing.good.push('Asked seller to state their price first — good anchor strategy'); }
+  else { pricing.bad.push('Should ask "What are you looking to get?" BEFORE giving a number — let the seller anchor low'); }
+
+  // Did agent justify lower price?
+  if (/as.is|sight unseen|condition|market|comp|repair|rehab|investor|wholesale/.test(agentText) && /\d/.test(agentText)) { pricing.score += 6; pricing.good.push('Justified the offer price with reasoning'); }
+  else if (/\d{2,3}(,\d{3})?|\d+\s*(grand|thousand|k)\b/.test(agentText)) { pricing.bad.push('Threw out a number without justifying it — always explain WHY the price is what it is'); }
+
+  // Did agent go below mail offer without proper framing?
+  if (/offer.*\d|letter.*\d|\d.*offer/.test(callerText)) {
+    const mailMatch = callerText.match(/\$?([\d,]+)/);
+    const agentMatch = agentText.match(/(\d+)\s*(grand|thousand|k)\b/);
+    if (mailMatch && agentMatch) {
+      const mailPrice = parseInt(mailMatch[1].replace(/,/g,''));
+      const agentPrice = parseInt(agentMatch[1]) * (agentMatch[2]==='k'?1000:agentMatch[2]==='grand'?1000:1000);
+      if (agentPrice < mailPrice * 0.6) {
+        pricing.bad.push(`Dropped from mail offer ($${mailPrice.toLocaleString()}) to $${agentPrice.toLocaleString()} — a ${Math.round((1-agentPrice/mailPrice)*100)}% haircut needs strong justification`);
+      } else { pricing.score += 4; }
+    }
+  }
+
+  // Did agent leave room to go up?
+  if (/come up|increase|more|better.*offer|pictures.*more|photos.*adjust|always offer.*more/.test(agentText)) { pricing.score += 4; pricing.good.push('Left room to increase — good framing for photos/inspection'); }
+  // Did agent avoid bidding against themselves?
+  if (/what.*think|fair|work for you|does that.*work/.test(agentText)) { pricing.score += 3; pricing.good.push('Checked seller reaction before committing'); }
+  else { pricing.bad.push('Should confirm if the price range works before moving on'); }
+  categories.push(pricing);
+
+  // 5. PROFESSIONALISM & CONTROL (10 pts)
+  let professionalism = { name:'Professionalism & Call Control', max:10, score:0, good:[], bad:[] };
+  const fillers = (agentText.match(/\b(um|uh|oh geez|oh gee|like,|you know,|honestly)\b/g) || []).length;
+  if (fillers <= 2) { professionalism.score += 3; professionalism.good.push('Minimal filler words'); }
+  else { professionalism.bad.push(`Excessive filler words (${fillers} instances) — undermines confidence`); }
+  if (/rebuilt/i.test(agentLines[0]?.text || '')) { professionalism.score += 2; professionalism.good.push('Correctly identified the company'); }
+  else if (/reboot|rebilt/i.test(agentLines[0]?.text || '')) { professionalism.bad.push('Mispronounced or misstated the company name'); }
+  if (call.duration > 120 && call.duration < 1200) { professionalism.score += 3; professionalism.good.push('Good call length — thorough without dragging'); }
+  else if (call.duration <= 120) { professionalism.bad.push('Call too short — may not have gathered enough info'); }
+  else { professionalism.bad.push('Call ran long — tighten up the conversation flow'); }
+  if (/messed up|not working|system.*down|can't find|not popping/.test(agentText)) { professionalism.bad.push('Shared internal system issues with the seller — keep it behind the scenes'); }
+  else { professionalism.score += 2; }
+  categories.push(professionalism);
+
+  // 6. CLOSE & NEXT STEPS (15 pts)
+  let close = { name:'Close & Next Steps', max:15, score:0, good:[], bad:[] };
+  if (/follow.up|reach out|call.*back|talk.*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week)/.test(agentText)) { close.score += 5; close.good.push('Set a specific follow-up time'); }
+  else { close.bad.push('No clear follow-up scheduled — always set a specific callback time'); }
+  if (/text|email|send.*info|contact.*info/.test(agentText)) { close.score += 3; close.good.push('Offered to send contact info via text/email'); }
+  if (/photo|picture|image|walkthrough|video/.test(agentText)) { close.score += 4; close.good.push('Requested photos/visual evidence before final offer'); }
+  if (/phone|number|best.*reach|email|contact/.test(agentText) && /confirm|verify|correct/.test(agentText)) { close.score += 3; close.good.push('Confirmed contact info'); }
+  else { close.bad.push('Didn\'t verify contact info — always confirm phone/email before hanging up'); }
+  categories.push(close);
+
+  const totalScore = categories.reduce((s,c) => s + c.score, 0);
+  const totalMax = categories.reduce((s,c) => s + c.max, 0);
+  const pct = Math.round((totalScore / totalMax) * 100);
+
+  let grade, gradeColor;
+  if (pct >= 90) { grade='A'; gradeColor='var(--green)'; }
+  else if (pct >= 80) { grade='B+'; gradeColor='var(--green)'; }
+  else if (pct >= 70) { grade='B'; gradeColor='var(--yellow)'; }
+  else if (pct >= 60) { grade='B-'; gradeColor='var(--yellow)'; }
+  else if (pct >= 50) { grade='C+'; gradeColor='var(--orange)'; }
+  else if (pct >= 40) { grade='C'; gradeColor='var(--orange)'; }
+  else if (pct >= 30) { grade='D'; gradeColor='var(--red)'; }
+  else { grade='F'; gradeColor='var(--red)'; }
+
+  return { categories, totalScore, totalMax, pct, grade, gradeColor };
+}
+
+function renderDetail(call) {
+  const panel = document.getElementById('detailPanel');
+  panel.classList.remove('empty');
+
+  const lines = parseTranscript(call.transcript);
+  const analysis = analyzeCall(call);
+
+  const transcriptHTML = lines.map(l => `
+    <div class="transcript-line">
+      <div class="speaker ${l.speaker.toLowerCase()}">${l.speaker}</div>
+      <div class="text">${l.text}</div>
+    </div>
+  `).join('');
+
+  const circumference = 2 * Math.PI * 42;
+  const offset = circumference - (analysis.pct / 100) * circumference;
+
+  const analysisHTML = analysis.categories.map(cat => {
+    const catPct = cat.max > 0 ? Math.round((cat.score/cat.max)*100) : 0;
+    let pillColor = catPct >= 70 ? 'var(--green)' : catPct >= 40 ? 'var(--yellow)' : 'var(--red)';
+    return `
+      <div class="analysis-section">
+        <h3>${cat.name} <span class="score-pill" style="background:${pillColor}22;color:${pillColor}">${cat.score}/${cat.max}</span></h3>
+        ${cat.good.map(g => `<div class="feedback-item positive">+ ${g}</div>`).join('')}
+        ${cat.bad.map(b => `<div class="feedback-item negative">- ${b}</div>`).join('')}
+      </div>
+    `;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="transcript-panel">
+      <div class="detail-header">
+        <h2>Transcript</h2>
+        <div class="detail-meta">
+          <span>${call.customer_name || 'Unknown'}</span>
+          <span>${formatPhone(call.customer_phone)}</span>
+          <span>${call.customer_city ? call.customer_city + ', ' + call.customer_state : ''}</span>
+          <span>${formatDate(call.start_time)}</span>
+          <span>${formatDuration(call.duration)}</span>
+        </div>
+      </div>
+      ${call.call_summary ? `<div class="summary-box"><strong>Summary:</strong> ${call.call_summary}</div>` : ''}
+      ${transcriptHTML}
+    </div>
+    <div class="analysis-panel">
+      <div class="detail-header">
+        <h2>Call Coaching & Grade</h2>
+      </div>
+      <div class="grade-ring">
+        <svg width="100" height="100">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border)" stroke-width="6"/>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="${analysis.gradeColor}" stroke-width="6"
+            stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round"/>
+        </svg>
+        <div class="grade-label" style="color:${analysis.gradeColor}">${analysis.grade}</div>
+        <div class="grade-score">${analysis.totalScore}/${analysis.totalMax} (${analysis.pct}%)</div>
+      </div>
+      ${analysisHTML}
+    </div>
+  `;
+}
+
+init();
+</script>
+</body>
+</html>
