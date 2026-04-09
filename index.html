@@ -33,6 +33,12 @@
   .search-box svg { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text2); }
   .stats { color:var(--text2); font-size:13px; white-space:nowrap; }
   .stats b { color:var(--text); }
+  .filter-bar { display:flex; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid var(--border); background:var(--surface); flex-wrap:wrap; }
+  .filter-btn { padding:5px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text2); cursor:pointer; font-size:12px; transition:all .15s; }
+  .filter-btn:hover { border-color:var(--accent); color:var(--text); }
+  .filter-btn.active { background:var(--accent2); border-color:var(--accent); color:#fff; }
+  .filter-label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+  .call-item .agent-name { color:var(--purple); font-size:12px; font-weight:500; }
 
   /* Main layout */
   .container { display:flex; height:calc(100vh - 57px); }
@@ -120,13 +126,20 @@
   <h1>Rebuilt <span>Call Dashboard</span></h1>
   <div class="search-box">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-    <input type="text" id="searchInput" placeholder="Search by name or phone number...">
+    <input type="text" id="searchInput" placeholder="Search by name, phone, or agent...">
   </div>
   <div class="stats" id="stats"></div>
 </div>
 
 <div class="container">
   <div class="list-panel">
+    <div class="filter-bar">
+      <span class="filter-label">Duration:</span>
+      <button class="filter-btn" data-min="0" onclick="setDurationFilter(0)">All</button>
+      <button class="filter-btn active" data-min="120" onclick="setDurationFilter(120)">2m+</button>
+      <button class="filter-btn" data-min="300" onclick="setDurationFilter(300)">5m+</button>
+      <button class="filter-btn" data-min="600" onclick="setDurationFilter(600)">10m+</button>
+    </div>
     <div class="call-list" id="callList">
       <div class="loading"><div class="spinner"></div>Loading calls...</div>
     </div>
@@ -146,19 +159,46 @@ let allCalls = [];
 let filteredCalls = [];
 let currentPage = 1;
 let selectedCallId = null;
+let minDuration = 120;
+
+function extractAgentName(transcript) {
+  if (!transcript) return '';
+  const m = transcript.match(/(?:this is|my name is|i'm|i am)\s+([A-Z][a-z]+)/i);
+  if (m && !['Business','Thank','This','Your','An'].includes(m[1])) return m[1];
+  return '';
+}
 
 async function init() {
   try {
     const res = await fetch('calls.json');
     const data = await res.json();
-    allCalls = data.calls;
-    filteredCalls = allCalls;
-    updateStats();
-    renderList();
-    renderPagination();
+    allCalls = data.calls.map(c => ({ ...c, agent_name: extractAgentName(c.transcript) }));
+    applyFilters();
   } catch (e) {
     document.getElementById('callList').innerHTML = '<div class="loading" style="color:var(--red)">Failed to load calls.json — run: node fetch-calls.js</div>';
   }
+}
+
+function setDurationFilter(min) {
+  minDuration = min;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.min) === min));
+  applyFilters();
+}
+
+function applyFilters() {
+  const q = (document.getElementById('searchInput').value || '').toLowerCase().replace(/[\s\-\(\)]/g,'');
+  filteredCalls = allCalls.filter(c => {
+    if (c.duration < minDuration) return false;
+    if (!q) return true;
+    const name = (c.customer_name||'').toLowerCase();
+    const phone = (c.customer_phone||'').replace(/\D/g,'');
+    const agent = (c.agent_name||'').toLowerCase();
+    return name.includes(q) || phone.includes(q) || agent.includes(q);
+  });
+  currentPage = 1;
+  updateStats();
+  renderList();
+  renderPagination();
 }
 
 function updateStats() {
@@ -192,21 +232,7 @@ function leadColor(score) {
 }
 
 // Search
-document.getElementById('searchInput').addEventListener('input', function() {
-  const q = this.value.toLowerCase().replace(/[\s\-\(\)]/g,'');
-  if (!q) { filteredCalls = allCalls; }
-  else {
-    filteredCalls = allCalls.filter(c => {
-      const name = (c.customer_name||'').toLowerCase();
-      const phone = (c.customer_phone||'').replace(/\D/g,'');
-      return name.includes(q) || phone.includes(q);
-    });
-  }
-  currentPage = 1;
-  updateStats();
-  renderList();
-  renderPagination();
-});
+document.getElementById('searchInput').addEventListener('input', () => applyFilters());
 
 function classifyOutcome(c) {
   const t = (c.transcript || '').toLowerCase();
@@ -274,7 +300,7 @@ function renderList() {
       <div class="name">${c.customer_name || 'Unknown'}
         ${c.lead_score ? `<span class="lead-badge" style="background:${leadColor(c.lead_score)}22;color:${leadColor(c.lead_score)}">${c.lead_score}</span>` : ''}
       </div>
-      <div class="phone">${formatPhone(c.customer_phone)}</div>
+      <div class="phone">${formatPhone(c.customer_phone)}${c.agent_name ? ` <span class="agent-name">— ${c.agent_name}</span>` : ''}</div>
       <div class="meta">
         <span>${formatDate(c.start_time)}</span>
         <span class="duration">${formatDuration(c.duration)}</span>
