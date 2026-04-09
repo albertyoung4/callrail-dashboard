@@ -242,9 +242,25 @@ function classifyOutcome(c) {
   const summary = (c.call_summary || '').toLowerCase();
   const all = t + ' ' + summary;
   const dur = c.duration || 0;
+  const five9 = (c.five9_disposition || '').toLowerCase();
 
-  // Do Not Contact / Remove
-  if (/do not (call|contact)|stop (calling|sending)|remove (me|my|us|this)|take me off|don'?t (ever )?call|unsubscribe|harassment|lawyer|attorney|sue you|reported|blocking/.test(all))
+  // Use Five9 disposition when available — source of truth
+  if (five9) {
+    if (/do not c|dnc|do not contact/.test(five9)) return { label:'Do Not Contact', color:'var(--red)', bg:'rgba(239,68,68,.12)' };
+    if (/appointment set/.test(five9)) return { label:'Appointment Set', color:'var(--green)', bg:'rgba(52,211,153,.12)' };
+    if (/opportunity/.test(five9)) return { label:'Opportunity', color:'var(--accent)', bg:'rgba(79,140,255,.12)' };
+    if (/not selling/.test(five9)) return { label:'Not Selling', color:'var(--red)', bg:'rgba(239,68,68,.12)' };
+    if (/wrong number/.test(five9)) return { label:'Wrong Number', color:'var(--orange)', bg:'rgba(249,115,22,.12)' };
+    if (/marketplace/.test(five9)) return { label:'Marketplace', color:'var(--purple)', bg:'rgba(167,139,250,.12)' };
+    if (/follow.up|callback/.test(five9)) return { label:'Follow Up', color:'var(--yellow)', bg:'rgba(251,191,36,.12)' };
+    if (/active listing/.test(five9)) return { label:'Active Listing', color:'var(--orange)', bg:'rgba(249,115,22,.12)' };
+    if (/no disposition/.test(five9)) { /* fall through to transcript analysis */ }
+    else if (/caller disconnect|answering machine|no answer/.test(five9)) { /* fall through */ }
+    else if (five9.trim()) return { label: five9.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' '), color:'var(--text2)', bg:'rgba(139,144,160,.12)' };
+  }
+
+  // Do Not Contact / Remove — require strong signals, not just keyword mentions
+  if (/do not (call|contact)|stop (calling|sending|mailing)|remove (me|my|us|this).*(list|mail)|take me off|don'?t (ever )?(call|send|mail)|unsubscribe|harassment|sue you|reported you|blocking (you|this|your)/.test(all))
     return { label:'Do Not Contact', color:'var(--red)', bg:'rgba(239,68,68,.12)' };
 
   // Wrong Number
