@@ -54,6 +54,7 @@
   .call-item .meta .duration { color:var(--green); }
   .call-item .meta .source { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .call-item .lead-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:600; margin-left:8px; }
+  .call-item .outcome-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; margin-top:6px; }
 
   /* Pagination */
   .pagination { display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border-top:1px solid var(--border); background:var(--surface); }
@@ -207,6 +208,55 @@ document.getElementById('searchInput').addEventListener('input', function() {
   renderPagination();
 });
 
+function classifyOutcome(c) {
+  const t = (c.transcript || '').toLowerCase();
+  const summary = (c.call_summary || '').toLowerCase();
+  const all = t + ' ' + summary;
+  const dur = c.duration || 0;
+
+  // Do Not Contact / Remove
+  if (/do not (call|contact)|stop (calling|sending)|remove (me|my|us|this)|take me off|don'?t (ever )?call|unsubscribe|harassment|lawyer|attorney|sue you|reported|blocking/.test(all))
+    return { label:'Do Not Contact', color:'var(--red)', bg:'rgba(239,68,68,.12)' };
+
+  // Wrong Number
+  if (/wrong (number|person|house|address)|don'?t own|not my (house|property|home)|never owned|no longer own|sold (it|that|the)/.test(all))
+    return { label:'Wrong Number', color:'var(--orange)', bg:'rgba(249,115,22,.12)' };
+
+  // Voicemail / No Answer
+  if (dur <= 15 || /voicemail|leave a message|no one.*available|mailbox/.test(all))
+    return { label:'Voicemail', color:'var(--text2)', bg:'rgba(139,144,160,.12)' };
+
+  // Call Dropped
+  if (/can you hear me|hello\?.*hello\?|dropped|disconnected|lost.*connection/.test(t) && dur < 120)
+    return { label:'Call Dropped', color:'var(--orange)', bg:'rgba(249,115,22,.12)' };
+
+  // Contract Sent
+  if (/contract|agreement|sign|docusign|pandadoc|send.*(over|you).*(paperwork|contract|agreement)|under contract|put.*on.*contract/.test(all))
+    return { label:'Contract Sent', color:'var(--green)', bg:'rgba(52,211,153,.12)' };
+
+  // Offer Made
+  if (/offer.*(of|is|at|around|about)\s*\$?\d|we.*(offer|do|go|come in at)\s*\$?\d|\d+\s*(grand|thousand|k)\b.*offer|probably.*about.*\d+(,\d+)?/.test(t) && dur > 120)
+    return { label:'Offer Made', color:'var(--accent)', bg:'rgba(79,140,255,.12)' };
+
+  // Follow Up Call
+  if (/follow.?up|call.*(back|again|monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week)|reach out.*(to you|on|later)|schedule|set.*time|talk.*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|later)|send.*(text|info|pictures|photos)/.test(all))
+    return { label:'Follow Up', color:'var(--yellow)', bg:'rgba(251,191,36,.12)' };
+
+  // Not Interested
+  if (/not interested|no thank|don'?t think so|not (right now|at this time|looking|selling)|too low|that'?s (too|way too) low|insulting|decline|rejected|not worth|pass on|no way/.test(all))
+    return { label:'Not Interested', color:'var(--red)', bg:'rgba(239,68,68,.12)' };
+
+  // Qualified Lead (long call, engaged)
+  if (dur > 300)
+    return { label:'Qualified Lead', color:'var(--purple)', bg:'rgba(167,139,250,.12)' };
+
+  // Info Gathered
+  if (dur > 60)
+    return { label:'Info Gathered', color:'var(--text2)', bg:'rgba(139,144,160,.12)' };
+
+  return { label:'Short Call', color:'var(--text2)', bg:'rgba(139,144,160,.12)' };
+}
+
 function renderList() {
   const start = (currentPage-1)*PER_PAGE;
   const page = filteredCalls.slice(start, start+PER_PAGE);
@@ -217,7 +267,9 @@ function renderList() {
     return;
   }
 
-  list.innerHTML = page.map(c => `
+  list.innerHTML = page.map(c => {
+    const outcome = classifyOutcome(c);
+    return `
     <div class="call-item ${c.id === selectedCallId ? 'active' : ''}" data-id="${c.id}">
       <div class="name">${c.customer_name || 'Unknown'}
         ${c.lead_score ? `<span class="lead-badge" style="background:${leadColor(c.lead_score)}22;color:${leadColor(c.lead_score)}">${c.lead_score}</span>` : ''}
@@ -228,8 +280,9 @@ function renderList() {
         <span class="duration">${formatDuration(c.duration)}</span>
         <span class="source" title="${c.source||''}">${(c.source||'').split(' - ').slice(-2).join(' - ')}</span>
       </div>
+      <div><span class="outcome-badge" style="background:${outcome.bg};color:${outcome.color}">${outcome.label}</span></div>
     </div>
-  `).join('');
+  `;}).join('');
 
   list.querySelectorAll('.call-item').forEach(el => {
     el.addEventListener('click', () => selectCall(el.dataset.id));
