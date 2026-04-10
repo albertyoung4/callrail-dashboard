@@ -38,7 +38,38 @@
   .filter-btn:hover { border-color:var(--accent); color:var(--text); }
   .filter-btn.active { background:var(--accent2); border-color:var(--accent); color:#fff; }
   .filter-label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+  .filter-sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
   .call-item .agent-name { color:var(--purple); font-size:12px; font-weight:500; }
+  .call-item .source-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; margin-left:4px; vertical-align:middle; }
+  .call-item .source-badge.callrail { background:rgba(79,140,255,.15); color:var(--accent); }
+  .call-item .source-badge.zoom { background:rgba(167,139,250,.15); color:var(--purple); }
+
+  /* Department tabs */
+  .dept-tabs { display:flex; border-bottom:1px solid var(--border); background:var(--surface); }
+  .dept-tab { flex:1; padding:14px 16px; text-align:center; font-size:14px; font-weight:700; cursor:pointer; border:none; background:none; color:var(--text2); border-bottom:3px solid transparent; transition:all .15s; text-transform:uppercase; letter-spacing:1px; }
+  .dept-tab:hover { color:var(--text); background:var(--surface2); }
+  .dept-tab.active.acq { color:var(--accent); border-bottom-color:var(--accent); }
+  .dept-tab.active.dispo { color:var(--purple); border-bottom-color:var(--purple); }
+
+  /* Breadcrumb / back nav */
+  .breadcrumb { display:flex; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid var(--border); background:var(--surface); font-size:13px; }
+  .breadcrumb .back-btn { background:none; border:none; color:var(--accent); cursor:pointer; font-size:13px; display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:4px; }
+  .breadcrumb .back-btn:hover { background:var(--surface2); }
+  .breadcrumb .crumb { color:var(--text2); }
+  .breadcrumb .crumb-current { color:var(--text); font-weight:600; }
+
+  /* Rep list */
+  .rep-list { flex:1; overflow-y:auto; }
+  .rep-item { padding:14px 18px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .15s; display:flex; align-items:center; gap:12px; }
+  .rep-item:hover { background:var(--surface2); }
+  .rep-item .rep-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0; }
+  .rep-item.acq .rep-avatar { background:rgba(79,140,255,.15); color:var(--accent); }
+  .rep-item.dispo .rep-avatar { background:rgba(167,139,250,.15); color:var(--purple); }
+  .rep-item .rep-info { flex:1; min-width:0; }
+  .rep-item .rep-name { font-weight:600; font-size:14px; }
+  .rep-item .rep-meta { color:var(--text2); font-size:12px; margin-top:2px; display:flex; gap:12px; }
+  .rep-item .rep-calls { font-size:13px; font-weight:700; color:var(--text2); white-space:nowrap; }
+  .rep-item .rep-avg-grade { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; margin-left:8px; }
 
   /* Main layout */
   .container { display:flex; height:calc(100vh - 57px); min-height:0; }
@@ -149,16 +180,16 @@
 
 <div class="container">
   <div class="list-panel">
-    <div class="filter-bar">
-      <span class="filter-label">Duration:</span>
-      <button class="filter-btn" data-min="0" onclick="setDurationFilter(0)">All</button>
-      <button class="filter-btn active" data-min="120" onclick="setDurationFilter(120)">2m+</button>
-      <button class="filter-btn" data-min="300" onclick="setDurationFilter(300)">5m+</button>
-      <button class="filter-btn" data-min="600" onclick="setDurationFilter(600)">10m+</button>
+    <div class="dept-tabs">
+      <button class="dept-tab acq active" onclick="setDepartment('acquisition')">Acquisition</button>
+      <button class="dept-tab dispo" onclick="setDepartment('disposition')">Disposition</button>
     </div>
-    <div class="call-list" id="callList">
+    <div id="breadcrumb" class="breadcrumb" style="display:none;"></div>
+    <div id="subFilters" class="filter-bar" style="display:none;"></div>
+    <div class="rep-list" id="repList">
       <div class="loading"><div class="spinner"></div>Loading calls...</div>
     </div>
+    <div class="call-list" id="callList" style="display:none;"></div>
     <div class="pagination" id="pagination"></div>
   </div>
   <div class="detail-panel empty" id="detailPanel">
@@ -175,10 +206,14 @@ let allCalls = [];
 let filteredCalls = [];
 let currentPage = 1;
 let selectedCallId = null;
-let minDuration = 120;
+let minDuration = 0;
+
+// Drill-down state
+let department = 'acquisition'; // 'acquisition' or 'disposition'
+let selectedRep = null;         // null = show rep list, string = show that rep's calls
+let callTypeFilter = 'all';
 
 function extractAgentName(call) {
-  // Prefer Five9 agent_name, fall back to transcript extraction
   if (call.agent_name) return call.agent_name;
   if (!call.transcript) return '';
   const m = call.transcript.match(/(?:this is|my name is|i'm|i am)\s+([A-Z][a-z]+)/i);
@@ -186,41 +221,268 @@ function extractAgentName(call) {
   return '';
 }
 
+// Classify a call as acquisition or disposition
+function classifyDepartment(call) {
+  // Zoom Phone = disposition team
+  if (call.source_system === 'zoom_phone') return 'disposition';
+  // Five9 "Transferred to Dispo Agent" = dispo
+  if (/transfer.*dispo|dispo.*agent/i.test(call.five9_disposition || '')) return 'disposition';
+  // CallRail/Five9 = acquisition team
+  return 'acquisition';
+}
+
+// Get call type label for sub-filtering
+function getCallType(call) {
+  if (call.source_system === 'zoom_phone') {
+    const all = (call.transcript || '').toLowerCase();
+    if (/appointment|set.*appt|virtual.*appointment|confirm.*appointment/.test(all)) return 'Appointment';
+    if (/retrade|price.*adjust|renegotiat|revised.*offer/.test(all)) return 'Retrade';
+    if (/flat fee|listing.*agreement|mls/.test(all)) return 'Flat Fee';
+    if (/investor|portfolio|deal.*flow|wholesale|buyer.*list/.test(all)) {
+      if (/cold|first.*time|introduction|nice to meet/.test(all)) return 'Investor Cold';
+      return 'Investor Outreach';
+    }
+    if (/follow.*up|checking.*in|touch.*base|circle.*back/.test(all)) return 'Follow Up';
+    if (/protected.*lead|hot.*lead|warm.*transfer/.test(all)) return 'Protected Lead';
+    if (/sell|property|house|home|offer|mailer|deed|mortgage|closing/.test(all)) return 'Seller Call';
+    return 'General';
+  }
+  // Acquisition call types
+  const src = (call.source || '').toLowerCase();
+  const five9 = (call.five9_disposition || '').toLowerCase();
+  const dir = (call.direction || '').toLowerCase();
+  if (/return call|contact center return/i.test(src)) return 'Return Call';
+  if (dir === 'outbound' || /outbound/i.test(src)) return 'Outbound';
+  if (/callback|call.?back/i.test(five9) || /callback/i.test(src)) return 'Callback';
+  return 'New Inbound';
+}
+
 async function init() {
   try {
-    const res = await fetch('calls.json');
-    const data = await res.json();
-    allCalls = data.calls.map(c => ({ ...c, agent_name: extractAgentName(c) }));
-    applyFilters();
+    const [crRes, zmRes] = await Promise.allSettled([
+      fetch('calls.json').then(r => r.json()),
+      fetch('zoom-calls.json').then(r => r.json())
+    ]);
+
+    let crCalls = [];
+    if (crRes.status === 'fulfilled') {
+      crCalls = (crRes.value.calls || []).map(c => ({
+        ...c,
+        source_system: c.source_system || 'callrail',
+        agent_name: extractAgentName(c)
+      }));
+    }
+
+    let zmCalls = [];
+    if (zmRes.status === 'fulfilled') {
+      zmCalls = (zmRes.value.calls || []).map(c => ({
+        ...c,
+        source_system: 'zoom_phone',
+        agent_name: c.agent_name || ''
+      }));
+    }
+
+    allCalls = [...crCalls, ...zmCalls].sort((a,b) => new Date(b.start_time) - new Date(a.start_time));
+
+    // Tag each call with department and call type
+    allCalls.forEach(c => {
+      c._dept = classifyDepartment(c);
+      c._callType = getCallType(c);
+    });
+
+    console.log(`Loaded ${crCalls.length} CallRail + ${zmCalls.length} Zoom Phone = ${allCalls.length} total calls`);
+    renderView();
   } catch (e) {
-    document.getElementById('callList').innerHTML = '<div class="loading" style="color:var(--red)">Failed to load calls.json — run: node fetch-calls.js</div>';
+    document.getElementById('repList').innerHTML = '<div class="loading" style="color:var(--red)">Failed to load call data</div>';
   }
+}
+
+function setDepartment(dept) {
+  department = dept;
+  selectedRep = null;
+  callTypeFilter = 'all';
+  document.querySelectorAll('.dept-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.dept-tab.${dept === 'acquisition' ? 'acq' : 'dispo'}`).classList.add('active');
+  renderView();
+}
+
+function selectRep(repName) {
+  selectedRep = repName;
+  callTypeFilter = 'all';
+  currentPage = 1;
+  renderView();
+}
+
+function backToReps() {
+  selectedRep = null;
+  callTypeFilter = 'all';
+  selectedCallId = null;
+  // Reset detail panel
+  const dp = document.getElementById('detailPanel');
+  dp.classList.add('empty');
+  dp.innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.05 5A5 5 0 0119 8.95M15.05 1A9 9 0 0123 8.94M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><p>Select a call to view transcript & analysis</p></div>';
+  renderView();
+}
+
+function setCallTypeFilter(type) {
+  callTypeFilter = type;
+  currentPage = 1;
+  renderView();
 }
 
 function setDurationFilter(min) {
   minDuration = min;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.min) === min));
-  applyFilters();
+  document.querySelectorAll('[data-min]').forEach(b => b.classList.toggle('active', parseInt(b.dataset.min) === min));
+  currentPage = 1;
+  applyRepCallFilters();
 }
 
-function applyFilters() {
+function getDeptCalls() {
   const q = (document.getElementById('searchInput').value || '').toLowerCase().replace(/[\s\-\(\)]/g,'');
-  filteredCalls = allCalls.filter(c => {
-    if (c.duration < minDuration) return false;
+  return allCalls.filter(c => {
+    if (c._dept !== department) return false;
+    if (c.duration < 60) return false; // minimum 1 min for rep view
     if (!q) return true;
     const name = (c.customer_name||'').toLowerCase();
     const phone = (c.customer_phone||'').replace(/\D/g,'');
     const agent = (c.agent_name||'').toLowerCase();
     return name.includes(q) || phone.includes(q) || agent.includes(q);
   });
-  currentPage = 1;
+}
+
+function renderView() {
+  if (selectedRep) {
+    renderRepCalls();
+  } else {
+    renderRepList();
+  }
+  updateStats();
+}
+
+function renderRepList() {
+  const repListEl = document.getElementById('repList');
+  const callListEl = document.getElementById('callList');
+  const breadcrumbEl = document.getElementById('breadcrumb');
+  const subFiltersEl = document.getElementById('subFilters');
+  const paginationEl = document.getElementById('pagination');
+
+  repListEl.style.display = '';
+  callListEl.style.display = 'none';
+  breadcrumbEl.style.display = 'none';
+  subFiltersEl.style.display = 'none';
+  paginationEl.innerHTML = '';
+
+  const deptCalls = getDeptCalls();
+  const isAcq = department === 'acquisition';
+
+  // Group by agent
+  const repMap = {};
+  for (const c of deptCalls) {
+    const rep = c.agent_name || 'Unknown';
+    if (!repMap[rep]) repMap[rep] = { calls: [], totalDuration: 0 };
+    repMap[rep].calls.push(c);
+    repMap[rep].totalDuration += c.duration || 0;
+  }
+
+  // Sort by call count descending
+  const reps = Object.entries(repMap)
+    .map(([name, data]) => ({ name, ...data }))
+    .sort((a, b) => b.calls.length - a.calls.length);
+
+  if (reps.length === 0) {
+    repListEl.innerHTML = '<div class="loading">No reps found</div>';
+    return;
+  }
+
+  repListEl.innerHTML = reps.map(rep => {
+    const initials = rep.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const avgDur = Math.round(rep.totalDuration / rep.calls.length);
+    const types = {};
+    rep.calls.forEach(c => { types[c._callType] = (types[c._callType] || 0) + 1; });
+    const topTypes = Object.entries(types).sort((a,b) => b[1] - a[1]).slice(0, 3).map(([t,n]) => `${t}: ${n}`).join(', ');
+
+    return `
+      <div class="rep-item ${isAcq ? 'acq' : 'dispo'}" onclick="selectRep('${rep.name.replace(/'/g, "\\'")}')">
+        <div class="rep-avatar">${initials || '?'}</div>
+        <div class="rep-info">
+          <div class="rep-name">${rep.name}</div>
+          <div class="rep-meta">
+            <span>Avg ${formatDuration(avgDur)}</span>
+            <span>${topTypes}</span>
+          </div>
+        </div>
+        <div class="rep-calls">${rep.calls.length} calls</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderRepCalls() {
+  const repListEl = document.getElementById('repList');
+  const callListEl = document.getElementById('callList');
+  const breadcrumbEl = document.getElementById('breadcrumb');
+  const subFiltersEl = document.getElementById('subFilters');
+  const isAcq = department === 'acquisition';
+
+  repListEl.style.display = 'none';
+  callListEl.style.display = '';
+  breadcrumbEl.style.display = '';
+  subFiltersEl.style.display = '';
+
+  // Breadcrumb
+  breadcrumbEl.innerHTML = `
+    <button class="back-btn" onclick="backToReps()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      All Reps
+    </button>
+    <span class="crumb">/</span>
+    <span class="crumb-current" style="color:${isAcq ? 'var(--accent)' : 'var(--purple)'}">${selectedRep}</span>
+  `;
+
+  // Get this rep's calls and compute call types
+  const repCalls = getDeptCalls().filter(c => (c.agent_name || 'Unknown') === selectedRep);
+  const types = {};
+  repCalls.forEach(c => { types[c._callType] = (types[c._callType] || 0) + 1; });
+  const typeList = Object.entries(types).sort((a,b) => b[1] - a[1]);
+
+  // Sub-filters: call type + duration
+  subFiltersEl.innerHTML = `
+    <span class="filter-label">Type:</span>
+    <button class="filter-btn ${callTypeFilter === 'all' ? 'active' : ''}" onclick="setCallTypeFilter('all')">All (${repCalls.length})</button>
+    ${typeList.map(([t, n]) => `<button class="filter-btn ${callTypeFilter === t ? 'active' : ''}" onclick="setCallTypeFilter('${t}')">${t} (${n})</button>`).join('')}
+    <div class="filter-sep"></div>
+    <span class="filter-label">Duration:</span>
+    <button class="filter-btn ${minDuration === 0 ? 'active' : ''}" data-min="0" onclick="setDurationFilter(0)">All</button>
+    <button class="filter-btn ${minDuration === 120 ? 'active' : ''}" data-min="120" onclick="setDurationFilter(120)">2m+</button>
+    <button class="filter-btn ${minDuration === 300 ? 'active' : ''}" data-min="300" onclick="setDurationFilter(300)">5m+</button>
+    <button class="filter-btn ${minDuration === 600 ? 'active' : ''}" data-min="600" onclick="setDurationFilter(600)">10m+</button>
+  `;
+
+  applyRepCallFilters();
+}
+
+function applyRepCallFilters() {
+  const repCalls = getDeptCalls().filter(c => {
+    if ((c.agent_name || 'Unknown') !== selectedRep) return false;
+    if (callTypeFilter !== 'all' && c._callType !== callTypeFilter) return false;
+    if (c.duration < minDuration) return false;
+    return true;
+  });
+  filteredCalls = repCalls;
   updateStats();
   renderList();
   renderPagination();
 }
 
 function updateStats() {
-  document.getElementById('stats').innerHTML = `Showing <b>${filteredCalls.length}</b> of <b>${allCalls.length}</b> calls with transcripts`;
+  const deptLabel = department === 'acquisition' ? 'Acquisition' : 'Disposition';
+  if (selectedRep) {
+    document.getElementById('stats').innerHTML = `<b>${deptLabel}</b> — ${selectedRep}: <b>${filteredCalls.length}</b> calls`;
+  } else {
+    const deptCalls = getDeptCalls();
+    const reps = new Set(deptCalls.map(c => c.agent_name || 'Unknown'));
+    document.getElementById('stats').innerHTML = `<b>${deptLabel}</b>: <b>${reps.size}</b> reps, <b>${deptCalls.length}</b> calls`;
+  }
 }
 
 function formatDate(iso) {
@@ -250,7 +512,45 @@ function leadColor(score) {
 }
 
 // Search
-document.getElementById('searchInput').addEventListener('input', () => applyFilters());
+document.getElementById('searchInput').addEventListener('input', () => renderView());
+
+function classifyZoomOutcome(c, all, dur) {
+  // Zoom Phone call types per user: Appointments, Follow Ups, Seller Calls (intro/retrade/flat fee), Investor Outreach
+  if (dur <= 15) return { label:'Missed/VM', color:'var(--text2)', bg:'rgba(139,144,160,.12)' };
+
+  if (/retrade|price.*adjust|renegotiat|revised.*offer|updated.*number/.test(all))
+    return { label:'Retrade', color:'var(--orange)', bg:'rgba(249,115,22,.12)' };
+
+  if (/flat fee|listing.*agreement|mls|list.*property/.test(all))
+    return { label:'Flat Fee Listing', color:'var(--purple)', bg:'rgba(167,139,250,.12)' };
+
+  if (/appointment.*set|schedule.*appointment|set.*appt|confirm.*appointment|virtual.*appointment/.test(all))
+    return { label:'Appointment Set', color:'var(--green)', bg:'rgba(52,211,153,.12)' };
+
+  if (/contract|agreement|paperwork|docusign|pandadoc|sign/.test(all))
+    return { label:'Contract', color:'var(--green)', bg:'rgba(52,211,153,.12)' };
+
+  if (/investor|portfolio|deal.*flow|properties.*available|wholesale|buyer.*list/.test(all)) {
+    if (/cold|first.*time|introduction|nice to meet|haven't.*spoken/.test(all))
+      return { label:'Investor Cold', color:'var(--accent)', bg:'rgba(79,140,255,.12)' };
+    return { label:'Investor Outreach', color:'var(--accent)', bg:'rgba(79,140,255,.12)' };
+  }
+
+  if (/follow.*up|checking.*in|touch.*base|circle.*back|last.*time.*spoke|wanted.*to.*see/.test(all))
+    return { label:'Follow Up', color:'var(--yellow)', bg:'rgba(251,191,36,.12)' };
+
+  if (/protected.*lead|hot.*lead|warm.*transfer/.test(all))
+    return { label:'Protected Lead', color:'var(--green)', bg:'rgba(52,211,153,.12)' };
+
+  if (/offer|sell|property|house|home|mailer|deed|mortgage|closing/.test(all)) {
+    if (dur > 300) return { label:'Seller Call', color:'var(--purple)', bg:'rgba(167,139,250,.12)' };
+    return { label:'Seller Intro', color:'var(--yellow)', bg:'rgba(251,191,36,.12)' };
+  }
+
+  if (dur > 300) return { label:'Extended Call', color:'var(--purple)', bg:'rgba(167,139,250,.12)' };
+  if (dur > 60) return { label:'General', color:'var(--text2)', bg:'rgba(139,144,160,.12)' };
+  return { label:'Short Call', color:'var(--text2)', bg:'rgba(139,144,160,.12)' };
+}
 
 function classifyOutcome(c) {
   const t = (c.transcript || '').toLowerCase();
@@ -258,6 +558,11 @@ function classifyOutcome(c) {
   const all = t + ' ' + summary;
   const dur = c.duration || 0;
   const five9 = (c.five9_disposition || '').toLowerCase();
+
+  // Zoom Phone specific categorization
+  if (c.source_system === 'zoom_phone') {
+    return classifyZoomOutcome(c, all, dur);
+  }
 
   // Use Five9 disposition when available — source of truth
   if (five9) {
@@ -278,8 +583,8 @@ function classifyOutcome(c) {
   if (/do not (call|contact)|stop (calling|sending|mailing)|remove (me|my|us|this).*(list|mail)|take me off|don'?t (ever )?(call|send|mail)|unsubscribe|harassment|sue you|reported you|blocking (you|this|your)/.test(all))
     return { label:'Do Not Contact', color:'var(--red)', bg:'rgba(239,68,68,.12)' };
 
-  // Wrong Number
-  if (/wrong (number|person|house|address)|don'?t own|not my (house|property|home)|never owned|no longer own|sold (it|that|the)/.test(all))
+  // Wrong Number — only for short calls; a 5+ min call is clearly not a wrong number
+  if (dur < 300 && /wrong (number|person|house|address)|don'?t own|not my (house|property|home)|never owned|no longer own|sold (it|that|the)/.test(all))
     return { label:'Wrong Number', color:'var(--orange)', bg:'rgba(249,115,22,.12)' };
 
   // Voicemail / No Answer
@@ -329,9 +634,13 @@ function renderList() {
 
   list.innerHTML = page.map(c => {
     const outcome = classifyOutcome(c);
+    const isZoom = c.source_system === 'zoom_phone';
+    const sourceBadge = isZoom
+      ? '<span class="source-badge zoom">Zoom</span>'
+      : '<span class="source-badge callrail">CallRail</span>';
     return `
     <div class="call-item ${c.id === selectedCallId ? 'active' : ''}" data-id="${c.id}">
-      <div class="name">${c.customer_name || 'Unknown'}
+      <div class="name">${c.customer_name || 'Unknown'} ${sourceBadge}
         ${c.lead_score ? `<span class="lead-badge" style="background:${leadColor(c.lead_score)}22;color:${leadColor(c.lead_score)}">${c.lead_score}</span>` : ''}
       </div>
       <div class="phone">${formatPhone(c.customer_phone)}${c.agent_name ? ` <span class="agent-name">— ${c.agent_name}</span>` : ''}</div>
@@ -375,30 +684,54 @@ function selectCall(id) {
   renderDetail(call);
 }
 
-function parseTranscript(raw) {
+function parseTranscript(raw, call) {
   const lines = [];
+  if (!raw) return lines;
+
+  // Zoom Phone transcripts use "Speaker Name: text" format with newlines
+  if (call && call.source_system === 'zoom_phone') {
+    const zoomLines = raw.split('\n');
+    for (const line of zoomLines) {
+      const m = line.match(/^(.+?):\s+(.+)/);
+      if (m) {
+        const speaker = m[1].trim();
+        const text = m[2].trim();
+        // Determine if this is the agent (owner) or the other party
+        const isAgent = call.agent_name && speaker.toLowerCase().includes(call.agent_name.split(' ')[0].toLowerCase());
+        lines.push({ speaker, text, role: isAgent ? 'agent' : 'caller' });
+      }
+    }
+    return lines;
+  }
+
+  // CallRail format: "Agent: text Caller: text"
   const regex = /(Agent|Caller):\s*/gi;
   let match, lastIdx = 0, lastSpeaker = null;
   const text = raw.replace(/\n/g,' ');
   while ((match = regex.exec(text)) !== null) {
     if (lastSpeaker !== null) {
-      lines.push({ speaker: lastSpeaker, text: text.slice(lastIdx, match.index).trim() });
+      lines.push({ speaker: lastSpeaker, text: text.slice(lastIdx, match.index).trim(), role: lastSpeaker.toLowerCase() });
     }
     lastSpeaker = match[1];
     lastIdx = match.index + match[0].length;
   }
-  if (lastSpeaker) lines.push({ speaker: lastSpeaker, text: text.slice(lastIdx).trim() });
+  if (lastSpeaker) lines.push({ speaker: lastSpeaker, text: text.slice(lastIdx).trim(), role: lastSpeaker.toLowerCase() });
   return lines;
 }
 
 function analyzeCall(call) {
   const t = (call.transcript || '').toLowerCase();
-  const lines = parseTranscript(call.transcript || '');
-  const agentLines = lines.filter(l => l.speaker.toLowerCase() === 'agent');
-  const callerLines = lines.filter(l => l.speaker.toLowerCase() === 'caller');
+  const lines = parseTranscript(call.transcript || '', call);
+  const agentLines = lines.filter(l => (l.role || l.speaker.toLowerCase()) === 'agent');
+  const callerLines = lines.filter(l => (l.role || l.speaker.toLowerCase()) === 'caller');
   const agentText = agentLines.map(l => l.text).join(' ').toLowerCase();
   const callerText = callerLines.map(l => l.text).join(' ').toLowerCase();
   const allText = agentText + ' ' + callerText;
+
+  // For Zoom Phone calls, use a different grading rubric
+  if (call.source_system === 'zoom_phone') {
+    return analyzeZoomCall(call, lines, agentText, callerText, allText);
+  }
 
   const categories = [];
 
@@ -707,16 +1040,159 @@ function analyzeCall(call) {
   return { categories, totalScore, totalMax, pct, grade, gradeColor };
 }
 
+function analyzeZoomCall(call, lines, agentText, callerText, allText) {
+  const categories = [];
+  const dur = call.duration || 0;
+
+  // Classify the Zoom call type
+  const zoomType = classifyZoomType(call, allText, agentText, callerText);
+
+  // 1. PROFESSIONALISM & OPENING — 15 pts
+  let opening = { name:'Opening & Professionalism', max:15, score:0, good:[], bad:[] };
+  if (/rebuilt|hey.*(how|what)|good (morning|afternoon|evening)|thanks for (calling|taking|your time)/.test(agentText)) {
+    opening.score += 5; opening.good.push('Professional greeting');
+  } else if (dur > 60) { opening.bad.push('No clear professional greeting detected'); }
+  if (/how are you|how.*doing|hope.*well|how.*going/.test(agentText)) {
+    opening.score += 3; opening.good.push('Built rapport with check-in');
+  }
+  if (/purpose|reason.*call|calling (about|because|to)|following up|checking in|wanted to (discuss|talk|touch base)/.test(agentText)) {
+    opening.score += 4; opening.good.push('Stated purpose of call');
+  } else if (dur > 120) { opening.bad.push('Should state purpose of call upfront'); }
+  if (/your time|appreciate|thank you for/.test(agentText)) {
+    opening.score += 3; opening.good.push('Respectful of other party\'s time');
+  }
+  categories.push(opening);
+
+  // 2. DISCOVERY & ENGAGEMENT — 25 pts
+  let discovery = { name:'Discovery & Engagement', max:25, score:0, good:[], bad:[] };
+  const questions = (agentText.match(/\?/g) || []).length;
+  if (questions >= 8) { discovery.score += 8; discovery.good.push(`Asked ${questions} questions — strong discovery`); }
+  else if (questions >= 4) { discovery.score += 5; discovery.good.push(`Asked ${questions} questions`); }
+  else if (questions >= 1) { discovery.score += 2; discovery.good.push(`Only ${questions} questions asked`); }
+  else if (dur > 120) { discovery.bad.push('Very few questions detected — passive approach'); }
+
+  const agentWordCount = agentText.split(/\s+/).length;
+  const callerWordCount = callerText.split(/\s+/).length;
+  const listenRatio = callerWordCount / (agentWordCount + callerWordCount + 1);
+  if (listenRatio > 0.30) { discovery.score += 5; discovery.good.push(`Good listen ratio (${Math.round(listenRatio*100)}% other party talk)`); }
+  else if (listenRatio < 0.15 && dur > 120) { discovery.bad.push(`Agent dominated (${Math.round((1-listenRatio)*100)}%) — ask more, listen more`); }
+  else { discovery.score += 2; }
+
+  if (/tell me more|what do you mean|elaborate|walk me through|help me understand/.test(agentText)) {
+    discovery.score += 4; discovery.good.push('Used probing follow-ups');
+  }
+  if (/timeline|when|how soon|deadline|by when|target date/.test(agentText)) {
+    discovery.score += 4; discovery.good.push('Established timeline');
+  } else if (dur > 300) { discovery.bad.push('No timeline discussed'); }
+  if (/budget|price range|what.*looking.*spend|numbers|financial/.test(agentText)) {
+    discovery.score += 4; discovery.good.push('Discussed financials/budget');
+  }
+  categories.push(discovery);
+
+  // 3. VALUE PROPOSITION & KNOWLEDGE — 20 pts
+  let value = { name:'Value Proposition & Knowledge', max:20, score:0, good:[], bad:[] };
+  if (/rebuilt|we (buy|purchase|close|offer)|cash (buyer|offer|sale)|no (fees|commission|closing cost)|as.is/.test(agentText)) {
+    value.score += 6; value.good.push('Communicated Rebuilt value proposition');
+  }
+  if (/market|comp|comparable|arv|after repair|neighborhood|area/.test(agentText)) {
+    value.score += 5; value.good.push('Demonstrated market knowledge');
+  }
+  if (/process|how (it |this )works|next step|from here|typically|generally/.test(agentText)) {
+    value.score += 5; value.good.push('Explained process clearly');
+  } else if (dur > 300) { value.bad.push('Should explain the process/next steps'); }
+  if (/example|for instance|recently|similar|other (sellers|properties|investors)/.test(agentText)) {
+    value.score += 4; value.good.push('Used examples or social proof');
+  }
+  categories.push(value);
+
+  // 4. OBJECTION HANDLING — 15 pts
+  let objections = { name:'Objection Handling', max:15, score:0, good:[], bad:[] };
+  const objected = /(not interested|too low|not sure|think about|don't know|no thanks|pass|not right now|that won't work|can't do that)/.test(callerText);
+  if (objected) {
+    if (/understand|totally|makes sense|appreciate|fair enough/.test(agentText)) {
+      objections.score += 4; objections.good.push('Acknowledged objection empathetically');
+    } else { objections.bad.push('Should acknowledge objection before responding'); }
+    if (/what.*(concern|holding|hesitant)|help me understand|what would|what.*need/.test(agentText)) {
+      objections.score += 4; objections.good.push('Probed to understand real objection');
+    }
+    if (/if (i|we) could|what if|would it help|how about/.test(agentText)) {
+      objections.score += 4; objections.good.push('Offered alternatives or solutions');
+    }
+    if (/earlier you|you mentioned|your situation|your goal/.test(agentText)) {
+      objections.score += 3; objections.good.push('Re-anchored to their motivation');
+    }
+  } else {
+    objections.score += 8; // No objections = partial credit
+  }
+  categories.push(objections);
+
+  // 5. CLOSE & NEXT STEPS — 25 pts
+  let close = { name:'Close & Next Steps', max:25, score:0, good:[], bad:[] };
+  if (/appointment|schedule|set up|calendar|book|meet|visit|come (out|by|look)/.test(agentText)) {
+    close.score += 7; close.good.push('Scheduled appointment or meeting');
+  }
+  if (/contract|agreement|paperwork|docusign|pandadoc|sign|offer.*writing/.test(agentText)) {
+    close.score += 7; close.good.push('Moved toward contract/agreement');
+  }
+  if (/follow.?up|call.*(back|you)|reach out|talk.*(monday|tuesday|wednesday|thursday|friday|tomorrow|next week)/.test(agentText)) {
+    close.score += 4; close.good.push('Set specific follow-up');
+  } else if (dur > 180 && !/contract|agreement|appointment/.test(agentText)) {
+    close.bad.push('No follow-up scheduled — always close with concrete next step');
+  }
+  if (/email|send.*info|text.*details|send.*over/.test(agentText)) {
+    close.score += 3; close.good.push('Committed to send information');
+  }
+  if (/my (number|cell|direct)|reach me|contact.*info|call me/.test(agentText)) {
+    close.score += 2; close.good.push('Shared contact info');
+  }
+  if (/thank|appreciate|great (talking|speaking|chatting)|look forward/.test(agentText)) {
+    close.score += 2; close.good.push('Professional closing');
+  }
+  categories.push(close);
+
+  // SCORING
+  const totalScore = categories.reduce((s,c) => s + c.score, 0);
+  const totalMax = categories.reduce((s,c) => s + c.max, 0);
+  const pct = Math.round((totalScore / totalMax) * 100);
+
+  let grade, gradeColor;
+  if (pct >= 90) { grade='A'; gradeColor='var(--green)'; }
+  else if (pct >= 80) { grade='B+'; gradeColor='var(--green)'; }
+  else if (pct >= 70) { grade='B'; gradeColor='var(--yellow)'; }
+  else if (pct >= 60) { grade='B-'; gradeColor='var(--yellow)'; }
+  else if (pct >= 50) { grade='C+'; gradeColor='var(--orange)'; }
+  else if (pct >= 40) { grade='C'; gradeColor='var(--orange)'; }
+  else if (pct >= 30) { grade='D'; gradeColor='var(--red)'; }
+  else { grade='F'; gradeColor='var(--red)'; }
+
+  return { categories, totalScore, totalMax, pct, grade, gradeColor, zoomType };
+}
+
+function classifyZoomType(call, allText, agentText, callerText) {
+  // Classify Zoom calls: Appointments, Follow Ups, Seller Calls (intro/retrade/flat fee), Investor Outreach
+  if (/appointment|set.*appt|virtual.*appointment|va\b|confirm.*appointment/.test(allText)) return 'appointment';
+  if (/retrade|price.*adjust|renegotiat|revised.*offer|updated.*number/.test(allText)) return 'retrade';
+  if (/flat fee|listing|mls|list.*property|list.*it/.test(allText)) return 'flat_fee';
+  if (/investor|portfolio|rental|buy.*hold|flip|wholesale|deal.*flow|properties.*available/.test(allText)) {
+    if (/cold|first.*time|haven't.*spoken|introduction|nice to meet/.test(allText)) return 'investor_cold';
+    return 'investor_outreach';
+  }
+  if (/follow.*up|checking.*in|touch.*base|last.*time.*spoke|wanted.*to.*see|circle.*back/.test(agentText)) return 'follow_up';
+  if (/protected.*lead|hot.*lead|transfer|warm.*lead/.test(allText)) return 'follow_up';
+  if (/sell|property|house|home|offer|mailer|deed/.test(allText)) return 'seller_call';
+  return 'general';
+}
+
 function renderDetail(call) {
   const panel = document.getElementById('detailPanel');
   panel.classList.remove('empty');
 
-  const lines = parseTranscript(call.transcript);
+  const lines = parseTranscript(call.transcript, call);
   const analysis = analyzeCall(call);
 
   const transcriptHTML = lines.map(l => `
     <div class="transcript-line">
-      <div class="speaker ${l.speaker.toLowerCase()}">${l.speaker}</div>
+      <div class="speaker ${l.role || l.speaker.toLowerCase()}">${l.speaker}</div>
       <div class="text">${l.text}</div>
     </div>
   `).join('');
@@ -766,6 +1242,9 @@ function renderDetail(call) {
           <span>${call.customer_city ? call.customer_city + ', ' + call.customer_state : ''}</span>
           <span>${formatDate(call.start_time)}</span>
           <span>${formatDuration(call.duration)}</span>
+          <span style="color:${call.source_system === 'zoom_phone' ? 'var(--purple)' : 'var(--accent)'}">${call.source_system === 'zoom_phone' ? 'Zoom Phone' : 'CallRail'}</span>
+          ${call.agent_name ? `<span style="color:var(--purple)">Agent: ${call.agent_name}</span>` : ''}
+          ${call.direction ? `<span>${call.direction === 'inbound' ? 'Inbound' : 'Outbound'}</span>` : ''}
         </div>
       </div>
       ${call.call_summary ? `<div class="summary-box"><strong>Summary:</strong> ${call.call_summary}</div>` : ''}
@@ -774,6 +1253,7 @@ function renderDetail(call) {
     <div class="analysis-panel">
       <div class="detail-header">
         <h2>Call Coaching & Grade</h2>
+        ${analysis.zoomType ? `<div style="color:var(--purple);font-size:12px;margin-top:4px;">Type: ${analysis.zoomType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div>` : ''}
       </div>
       <div class="grade-ring">
         <svg width="100" height="100">
