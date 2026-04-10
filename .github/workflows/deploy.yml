@@ -2,21 +2,51 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  schedule:
+    # Run every 2 hours during business hours (Mon-Fri 8am-8pm ET = 12-00 UTC)
+    - cron: '0 12,14,16,18,20,22,0 * * 1-5'
+  workflow_dispatch: # Manual trigger
+
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
+
 concurrency:
   group: pages
   cancel-in-progress: false
+
 jobs:
-  deploy:
+  fetch-and-deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch latest calls from CallRail
+        env:
+          CALLRAIL_API_KEY: ${{ secrets.CALLRAIL_API_KEY }}
+        run: node fetch-calls.js --merge
+
+      - name: Commit updated calls data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet calls.json; then
+            echo "No changes to calls.json"
+          else
+            git add calls.json
+            git commit -m "chore: update calls data $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

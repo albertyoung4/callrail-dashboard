@@ -100,6 +100,21 @@
   .feedback-item.negative { background:rgba(239,68,68,.08); border-left:3px solid var(--red); color:var(--red); }
   .feedback-item.warning { background:rgba(251,191,36,.08); border-left:3px solid var(--yellow); color:var(--yellow); }
 
+  .analysis-tabs { display:flex; gap:0; margin-bottom:16px; border-bottom:2px solid var(--border); }
+  .analysis-tab { padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; border:none; background:none; color:var(--text2); border-bottom:2px solid transparent; margin-bottom:-2px; transition:all .15s; }
+  .analysis-tab:hover { color:var(--text); }
+  .analysis-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  .summary-grid { display:flex; flex-direction:column; gap:10px; }
+  .summary-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:8px; background:var(--surface2); }
+  .summary-row .cat-name { flex:1; font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .summary-row .cat-bar-wrap { flex:0 0 100px; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+  .summary-row .cat-bar { height:100%; border-radius:4px; transition:width .3s; }
+  .summary-row .cat-score { font-size:12px; font-weight:700; min-width:44px; text-align:right; }
+  .summary-row .cat-grade { font-size:13px; font-weight:800; min-width:24px; text-align:center; }
+
   .summary-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:20px; font-size:13px; line-height:1.6; color:var(--text2); }
 
   /* Scrollbar */
@@ -388,216 +403,289 @@ function analyzeCall(call) {
   const categories = [];
 
   // ============================================================
-  // REBUILT TRAINING RUBRIC — Based on Four Pillars + 13-Step Flow
+  // REBUILT CALL SCRIPT RUBRIC — 13-Step Virtual Appointment Flow
+  // Based on "Direct Answer: Virtual Appointment Call Script"
   // ============================================================
 
-  // 1. OPENING & AGENDA SETTING (10 pts) — Steps 1-2
-  let opening = { name:'Opening & Agenda Setting', max:10, score:0, good:[], bad:[] };
-  if (/rebuilt/i.test(agentLines[0]?.text || '')) { opening.score += 2; opening.good.push('Correctly identified as Rebuilt'); }
-  else if (/reboot|rebilt/i.test(agentLines[0]?.text || '')) { opening.bad.push('Mispronounced company name — says "Reboot" instead of "Rebuilt"'); }
-  if (/name|first name|who am i speaking|call you/.test(agentText)) { opening.score += 2; opening.good.push('Confirmed caller\'s name'); }
-  else { opening.bad.push('Didn\'t confirm or ask for the caller\'s name'); }
-  if (/by the end|end of (this |the )?call|whether this makes sense|if it does.*if it doesn/.test(agentText)) { opening.score += 3; opening.good.push('Used outcome framing — "By the end of the call we\'ll know if this makes sense"'); }
-  else { opening.bad.push('Missing outcome framing — should set expectations: "By the end of this call, we\'ll know whether this makes sense for you"'); }
-  if (/decision.?maker|spouse|partner|wife|husband|anyone else.*involved|both.*on the (call|line|phone)/.test(agentText)) { opening.score += 3; opening.good.push('Confirmed all decision-makers are present'); }
-  else if (call.duration > 300) { opening.bad.push('Never confirmed if all decision-makers are on the call — risk of "I need to talk to my spouse" stall'); }
+  // 1. OPENING: INTRO & AGENDA (Steps 1-2) — 10 pts
+  let opening = { name:'Step 1-2: Opening & Agenda', max:10, score:0, good:[], bad:[] };
+  // Company ID
+  if (/rebuilt/i.test(agentLines[0]?.text || '')) { opening.score += 1; opening.good.push('Correctly identified as Rebuilt'); }
+  else if (/reboot|rebilt|breedville/i.test(agentLines[0]?.text || '')) { opening.bad.push('Mispronounced company name'); }
+  // Name confirmation
+  if (/your name|first name|who am i speaking|what.*name|call you/.test(agentText)) { opening.score += 1; opening.good.push('Asked for caller\'s name'); }
+  // Offer code
+  if (/offer code|mailer code|code/.test(agentText)) { opening.score += 1; opening.good.push('Asked for offer/mailer code'); }
+  // Agenda setting: "Most people want to know what we do, how we do it..."
+  if (/15.*20 minutes|how long.*take|my job is to|learn about your situation|see if.*qualifies|give it our best shot|sound fair/.test(agentText)) {
+    opening.score += 3; opening.good.push('Set agenda — explained call purpose and timeline');
+  } else if (/by the end|end of (this |the )?call|whether this makes sense/.test(agentText)) {
+    opening.score += 2; opening.good.push('Used outcome framing (partial agenda set)');
+  } else if (call.duration > 300) { opening.bad.push('No agenda set — should explain: "This call will take 15-20 min, my job is to learn about your situation and see if your property qualifies"'); }
+  // Decision-maker check
+  if (/decision.?maker|anyone else.*(consult|involved|need to talk)|spouse|partner|wife|husband|add them|both.*on/.test(agentText)) {
+    opening.score += 3; opening.good.push('Confirmed decision-makers — "Is there anyone else you\'d need to consult?"');
+  } else if (call.duration > 300) { opening.bad.push('Never checked for other decision-makers — risk of "I need to talk to my spouse" stall'); }
+  // Address confirmation
+  if (/confirm.*address|address.*correct|that.*address|verify.*address/.test(agentText)) { opening.score += 1; opening.good.push('Re-confirmed property address'); }
   categories.push(opening);
 
-  // 2. PILLAR 1 — OWNERSHIP (10 pts) — Step 3
-  let ownership = { name:'Pillar 1: Ownership', max:10, score:0, good:[], bad:[] };
-  if (/owner.*deed|deed.*owner|title|who.*(own|on the deed)|name.*on.*deed|show.*as.*owner/.test(agentText)) { ownership.score += 4; ownership.good.push('Verified ownership / names on deed'); }
-  else if (/owner|own|deed/.test(agentText)) { ownership.score += 2; ownership.good.push('Touched on ownership but didn\'t verify deed names'); }
-  else { ownership.bad.push('Never verified ownership — "I show X and Y as owners on the deed, is that correct?"'); }
+  // 2. FACT FINDING: OWNERSHIP (Step 3 / Pillar 1) — 10 pts
+  let ownership = { name:'Step 3: Ownership & Fact Finding', max:10, score:0, good:[], bad:[] };
+  // Ownership verification
+  if (/show.*as.*owner|owner.*on.*deed|deed.*owner|who.*(own|on the deed)|name.*on.*deed|owned it for/.test(agentText)) {
+    ownership.score += 3; ownership.good.push('Verified ownership — "I show X as owners on the deed, is that correct?"');
+  } else if (/own|owner/.test(agentText)) { ownership.score += 1; ownership.good.push('Touched on ownership but didn\'t verify deed names'); }
+  else if (call.duration > 300) { ownership.bad.push('Never verified deed ownership — critical first pillar'); }
+  // How acquired
+  if (/buy.*directly|auction|tax sale|inherit|how.*(acquire|get|come to own)/.test(agentText)) {
+    ownership.score += 2; ownership.good.push('Asked how property was acquired (direct purchase, auction, tax sale, inheritance)');
+  }
+  // Probate handling
   if (/probate|estate|inherit|passed away|deceased|heir/.test(allText)) {
-    if (/probate/.test(agentText)) { ownership.score += 3; ownership.good.push('Asked about probate status on inherited property'); }
-    else { ownership.bad.push('Inherited property mentioned but agent didn\'t ask about probate — deal killer if unresolved'); }
-  } else { ownership.score += 3; }
-  if (/llc|trust|entity|corporation|divorce|lien|bankrupt|foreclos/.test(allText)) {
-    if (/escalat|manager|market manager|let me check|flag/.test(agentText)) { ownership.score += 3; ownership.good.push('Flagged title complication for escalation'); }
-    else { ownership.bad.push('Title complication detected but not flagged for Market Manager — mandatory escalation per training'); }
-  } else { ownership.score += 3; }
+    if (/probate/.test(agentText)) { ownership.score += 2; ownership.good.push('Asked about probate status on inherited property'); }
+    else { ownership.bad.push('Inherited property detected — must ask "Has the estate been through probate yet?"'); }
+  } else { ownership.score += 2; }
+  // Occupancy type
+  if (/primary residence|investment|vacant|occupied|living there|tenant|rental/.test(agentText)) {
+    ownership.score += 2; ownership.good.push('Confirmed occupancy type (primary, investment, vacant)');
+  } else if (call.duration > 300) { ownership.bad.push('Didn\'t confirm occupancy type — primary residence vs investment vs vacant'); }
+  // Red flag escalation
+  if (/llc|trust|entity|divorce|lien|bankrupt|foreclos|poa|power of attorney/.test(allText)) {
+    if (/manager|market manager|escalat|let me check|flag|talk to my/.test(agentText)) { ownership.score += 1; ownership.good.push('Flagged title complication for escalation'); }
+    else { ownership.bad.push('Title red flag detected — must escalate to Market Manager per training'); }
+  } else { ownership.score += 1; }
   categories.push(ownership);
 
-  // 3. DISCOVERY & MOTIVATION (20 pts) — Step 4 (Most Important Per Training)
-  let discovery = { name:'Discovery & Motivation', max:20, score:0, good:[], bad:[] };
-  // "Spend as much time as possible in the motivation/story section"
-  if (/why.*(sell|move|let.*go|get rid)|what.*(driving|reason|situation|going on|made you (call|decide|reach))|what.*success.*look like|motivation/.test(agentText)) {
-    discovery.score += 6; discovery.good.push('Asked about seller\'s motivation — "What\'s driving the need to sell?"');
+  // 3. DISCOVERY: MOTIVATION & STORY (Step 4) — 20 pts
+  let discovery = { name:'Step 4: Discovery & Motivation', max:20, score:0, good:[], bad:[] };
+
+  // Problem Questions — "What's got you considering selling now?"
+  if (/what.*(got you|made you|driving|considering|thinking about)|why.*(sell|move|let.*go|considering)|other than.*mailer/.test(agentText)) {
+    discovery.score += 5; discovery.good.push('Asked Problem Question — "What\'s got you considering selling now?"');
   } else if (/sell|interested|looking to|definitely selling|got to go|too old|can\'t manage/.test(callerText)) {
-    discovery.score += 2; discovery.bad.push('Seller volunteered motivation but agent didn\'t dig deeper — ask "What does success look like for you?"');
-  } else { discovery.bad.push('Never uncovered seller motivation — the #1 diagnostic question per training'); }
+    discovery.score += 1; discovery.bad.push('Seller volunteered motivation but agent didn\'t ask a Problem Question — "Other than receiving our mailer, what\'s got you considering selling?"');
+  } else if (call.duration > 180) { discovery.bad.push('Never asked a Problem Question — #1 priority per script'); }
 
-  // Emotional mirroring & empathy
-  if (/sorry|condolence|understand|that.*(tough|hard|difficult|stressful)|i (can )?(imagine|appreciate)/.test(agentText) && /(passed|died|sick|medical|divorce|lost|injury|hardship|struggle)/.test(callerText)) {
-    discovery.score += 4; discovery.good.push('Mirrored seller emotion — showed genuine empathy at the right moment');
+  // Impact Questions — "When you say X, what do you mean? How long has that been on your mind?"
+  if (/when you say|what do you mean|how long has that|is that a big deal|really\?|tell me more/.test(agentText)) {
+    discovery.score += 4; discovery.good.push('Used Impact Questions — dug deeper into seller\'s pain');
+  } else if (call.duration > 300) { discovery.bad.push('No Impact Questions — should probe: "When you say that, what do you mean? How long has that been on your mind?"'); }
+
+  // Picture Perfect Questions — "If you could wave a magic wand..."
+  if (/magic wand|paint.*picture|where would you go|what would you do|what.*roadblock|what.*prevent/.test(agentText)) {
+    discovery.score += 3; discovery.good.push('Used Picture Perfect Questions — "If you could wave a magic wand, what would that look like?"');
+  }
+
+  // Emotional mirroring
+  if (/sorry|condolence|understand|that.*(tough|hard|difficult|stressful)|i (can )?(imagine|appreciate)|if i were in your shoes/.test(agentText) && /(passed|died|sick|medical|divorce|lost|injury|hardship|struggle|stress|frustrat|tired|exhaust)/.test(callerText)) {
+    discovery.score += 3; discovery.good.push('Mirrored seller emotion with empathy');
   } else if (/(passed|died|sick|medical|divorce|lost|injury|hardship|struggle)/.test(callerText)) {
-    discovery.bad.push('Seller shared emotional situation but agent didn\'t mirror — "Discovery creates trust" per training');
-  } else { discovery.score += 2; }
+    discovery.bad.push('Seller shared emotional situation — agent should mirror: "If I were in your shoes, I\'d probably feel the same way"');
+  } else { discovery.score += 1; }
 
-  // Rapport / story time
-  if (/how long.*(own|lived|had|been)|when.*(buy|purchase|move in)|tell me (about|more)/.test(agentText)) { discovery.score += 4; discovery.good.push('Explored ownership history and story'); }
-  else { discovery.bad.push('Didn\'t explore seller\'s story — spend more time here to build trust equity'); }
+  // Timeline
+  if (/timeline|when.*(close|move|sell|need|like to|hoping)|how soon|deadline|by when|end of|another place lined up/.test(agentText)) {
+    discovery.score += 3; discovery.good.push('Established timeline and urgency');
+  } else if (call.duration > 300) { discovery.bad.push('Never established timeline — ask "If you did sell, do you have another place lined up?"'); }
 
-  // Timeline / urgency
-  if (/timeline|when.*(close|move|sell|need|like to)|how soon|rush|urgent|deadline|by when|end of/.test(agentText)) { discovery.score += 3; discovery.good.push('Established timeline and urgency'); }
-  else { discovery.bad.push('Never established timeline — critical for urgency-based pricing leverage'); }
-
-  // Financial situation
-  if (/mortgage|owe|payoff|pay off|lien|tax|behind on|balance|what.*owe/.test(agentText)) { discovery.score += 3; discovery.good.push('Probed financial situation (mortgage, liens, taxes)'); }
-  else if (/owe|mortgage|behind|balance/.test(callerText)) { discovery.score += 1; discovery.bad.push('Seller mentioned financial details — agent should probe further on payoff amount'); }
-  else { discovery.bad.push('Didn\'t ask about mortgage balance, liens, or taxes'); }
+  // Financial / mortgage (bridge from condition section)
+  if (/mortgage|owe|payoff|pay off|paid off|lien|tax|balance|what.*owe|assume.*paid off/.test(agentText)) {
+    discovery.score += 2; discovery.good.push('Asked about mortgage/financial situation');
+  } else if (/owe|mortgage|behind|balance/.test(callerText)) {
+    discovery.score += 1; discovery.bad.push('Seller mentioned financials — agent should probe further');
+  } else if (call.duration > 300) { discovery.bad.push('Didn\'t ask about mortgage — use bridge: "I assume you already have this home paid off, right?"'); }
   categories.push(discovery);
 
-  // 4. PILLAR 2 — ACCESS / PHOTOS (10 pts)
-  let access = { name:'Pillar 2: Access & Photos', max:10, score:0, good:[], bad:[] };
-  if (/photo|picture|image|walkthrough|video/.test(agentText)) {
-    access.score += 5; access.good.push('Requested photos — non-negotiable per training');
-    if (/25|30|interior.*exterior|inside.*outside|every room/.test(agentText)) { access.score += 2; access.good.push('Specified 25-30 interior and exterior photos'); }
-    if (/lock.?box|amazon|key.*inside/.test(agentText)) { access.score += 3; access.good.push('Offered lock box delivery as alternative access path'); }
-    else if (/you.*take|send.*photo|text.*photo|email.*photo/.test(agentText)) { access.score += 3; access.good.push('Seller will take photos directly — preferred path per training'); }
-  } else if (call.duration > 300) {
-    access.bad.push('Never requested photos — "Photos are non-negotiable; without them, the deal stalls"');
+  // 4. CONDITION DIAGNOSTIC (Step 5 / Pillar 3) — 15 pts
+  let condition = { name:'Step 5: Condition & Due Diligence', max:15, score:0, good:[], bad:[] };
+  // A-F grade question
+  if (/grade|score|scale|a (being|to|through) f|a being.*list|f being.*teardown/.test(agentText)) {
+    condition.score += 3; condition.good.push('Used A-F grade question — "On a scale of A being ready to list and F being a teardown..."');
   }
-  if (/tenant|rent|occupied|someone.*living/.test(allText) && /tenant.*know|let.*tenant|aware|heads.up/.test(agentText)) {
-    access.score += 3; access.good.push('Addressed tenant awareness before access — per tenant-occupied script');
-  } else if (/tenant|rent|occupied|someone.*living/.test(callerText) && !/tenant.*know|let.*tenant/.test(agentText) && call.duration > 300) {
-    access.bad.push('Tenant-occupied property but didn\'t confirm tenants are aware of sale — "Rebuilt can\'t start until tenants are aware"');
+  // "What kept you from giving it an A?"
+  if (/what kept|what would make it|why not an? a|what.*prevent.*a\b/.test(agentText)) {
+    condition.score += 2; condition.good.push('Followed up with "What kept you from giving it an A?"');
   }
-  categories.push(access);
-
-  // 5. PILLAR 3 — DUE DILIGENCE / CONDITION (15 pts) — Step 5
-  let condition = { name:'Pillar 3: Due Diligence', max:15, score:0, good:[], bad:[] };
-  // Normalization language
-  if (/finance team|double.check|every (home|property|house)|standard|normal process|we do this on every/.test(agentText)) {
-    condition.score += 3; condition.good.push('Normalized due diligence — "We do this on every home"');
-  } else if (call.duration > 300) {
-    condition.bad.push('Missing DD normalization — should say "Everything we discuss helps our finance team double-check the numbers"');
-  }
-  // Condition checklist items
+  // Condition checklist
   let ddItems = 0;
-  if (/roof/.test(agentText)) { ddItems++; }
-  if (/hvac|heat|ac\b|air condition|furnace|heat pump/.test(agentText)) { ddItems++; }
-  if (/water heater|hot water/.test(agentText)) { ddItems++; }
-  if (/plumbing|pipe|cast iron|pvc|pex/.test(agentText)) { ddItems++; }
-  if (/electric|breaker|fuse|panel|wiring/.test(agentText)) { ddItems++; }
-  if (/foundation|slab|crawl|basement/.test(agentText)) { ddItems++; }
-  if (ddItems >= 4) { condition.score += 8; condition.good.push(`Covered ${ddItems}/6 condition checklist items (roof, HVAC, water heater, plumbing, electrical, foundation)`); }
-  else if (ddItems >= 2) { condition.score += 4; condition.good.push(`Covered ${ddItems}/6 condition items — should aim for all 6`); }
-  else if (call.duration > 300) { condition.bad.push('Minimal condition diagnostic — training requires systematic walkthrough: roof, HVAC, water heater, plumbing, electrical, foundation'); }
-  // Bed/bath/sqft
-  if (/bedroom|bathroom|squar|sq.*ft|size|how big/.test(agentText)) { condition.score += 2; condition.good.push('Gathered property specs (bed/bath/sqft)'); }
-  // Year built / lot
-  if (/year.*built|built in|when.*built|lot|land|acre/.test(agentText)) { condition.score += 2; condition.good.push('Asked about year built / lot details'); }
+  if (/roof/.test(agentText)) ddItems++;
+  if (/hvac|heat|ac\b|air condition|furnace|heat pump/.test(agentText)) ddItems++;
+  if (/water heater|hot water/.test(agentText)) ddItems++;
+  if (/plumbing|pipe|cast iron|pvc|pex|copper/.test(agentText)) ddItems++;
+  if (/electric|breaker|fuse|panel|wiring/.test(agentText)) ddItems++;
+  if (/foundation|slab|crawl|basement/.test(agentText)) ddItems++;
+  if (ddItems >= 5) { condition.score += 6; condition.good.push(`Excellent: covered ${ddItems}/6 condition checklist items`); }
+  else if (ddItems >= 3) { condition.score += 4; condition.good.push(`Covered ${ddItems}/6 condition items — aim for all 6 (roof, HVAC, water heater, plumbing, electrical, foundation)`); }
+  else if (ddItems >= 1) { condition.score += 2; condition.good.push(`Only ${ddItems}/6 condition items covered`); }
+  else if (call.duration > 300) { condition.bad.push('No condition checklist — must walk through: roof, HVAC, water heater, plumbing, electrical, foundation'); }
+  // Updates in last 3-5 years
+  if (/update|remodel|renovation|kitchen|bathroom|flooring|recent.*(work|improvement)/.test(agentText)) {
+    condition.score += 2; condition.good.push('Asked about recent updates (kitchen, bathrooms, flooring)');
+  }
+  // DD normalization language
+  if (/finance team|underwriting|double.check|every (home|property|house)|we do this on every|surprise (either|us|you)/.test(agentText)) {
+    condition.score += 2; condition.good.push('Normalized DD — "so our underwriting team doesn\'t come back and surprise either of us"');
+  }
   categories.push(condition);
 
-  // 6. PILLAR 4 — PRICING & NEGOTIATION (25 pts) — Steps 8-9
-  let pricing = { name:'Pillar 4: Pricing & Anchoring', max:25, score:0, good:[], bad:[] };
+  // 5. RECAP & CREDIBILITY (Steps 6-7) — 5 pts
+  let recap = { name:'Steps 6-7: Recap & Credibility', max:5, score:0, good:[], bad:[] };
+  if (/recap|let me.*confirm|just to confirm|so.*dealing with|sound right|sound about right|did.*sound.*right/.test(agentText)) {
+    recap.score += 2; recap.good.push('Recapped seller\'s situation — showed active listening');
+  } else if (call.duration > 600) { recap.bad.push('No recap before offer — should summarize: "So just to confirm — you\'re dealing with [pain], hoping to [goal]"'); }
+  if (/since 2018|thousands of homes|nationwide|largest|80 properties|every month|no fees|no commission|as.is/.test(agentText)) {
+    recap.score += 2; recap.good.push('Built credibility — shared Rebuilt\'s track record');
+  }
+  if (/have you considered listing|thought about.*agent|realtor|listing/.test(agentText)) {
+    recap.score += 1; recap.good.push('Addressed listing alternative proactively');
+  }
+  categories.push(recap);
 
-  // Anchor BEFORE asking seller's number (critical training rule)
+  // 6. PRICING & NEGOTIATION (Steps 8-9 / Pillar 4) — 25 pts
+  let pricing = { name:'Steps 8-9: Pricing & Negotiation', max:25, score:0, good:[], bad:[] };
+
   const agentPriceIdx = agentText.search(/\d{2,3}(,\d{3})|\d+\s*(grand|thousand|k)\b/);
-  const agentAskIdx = agentText.search(/what.*(looking for|want|expect|ballpark|range|number|hoping)/);
-  const usedCompAnchor = /properties like yours|comp|comparable|similar (homes|properties)|sold (between|for|around|at)/.test(agentText);
 
-  if (usedCompAnchor) {
-    pricing.score += 7; pricing.good.push('Used comp-based anchor — "Properties like yours sold between $XX and $YY"');
+  // Comp-based anchor: "Would it surprise you to know that cash sales for properties like yours..."
+  if (/would it surprise|surprise you|cash sales|properties like yours.*sold|comp|comparable|similar.*(homes|properties).*sold/.test(agentText)) {
+    pricing.score += 6; pricing.good.push('Used comp anchor — "Would it surprise you to know that cash sales for properties like yours sold between..."');
+  } else if (/sold (between|for|around|at)/.test(agentText)) {
+    pricing.score += 3; pricing.good.push('Referenced market data but didn\'t use full anchor script');
   } else if (agentPriceIdx > -1 && call.duration > 300) {
-    pricing.bad.push('Gave a price without anchoring to comps — should frame as "properties like yours sold between..."');
+    pricing.bad.push('Gave price without comp anchor — should frame: "Would it surprise you to know that cash sales sold between $XX and $YY?"');
   }
 
-  // Odd/specific numbers
-  if (/\d{2},\d{3}(?!,)|\d+,\d{3}(?!,000)/.test(agentText.replace(/\$?(\d+),?(\d+)/g, '$1,$2'))) {
-    pricing.score += 3; pricing.good.push('Used specific/odd numbers — builds credibility ($64,355 not $64,000)');
-  }
-
-  // "Going back to Finance" technique
-  if (/finance|team|run.*number|check with|get.*approv|was able to get them/.test(agentText)) {
-    pricing.score += 5; pricing.good.push('Used "going back to Finance" technique — creates real pause and authority');
+  // Finance Team hold technique: actual 60-second hold
+  if (/finance.*(team|manager)|check with|get.*approv|was able to get them|speak with|spoke with|run this by|wish me luck|put you on.*hold|brief hold/.test(agentText)) {
+    pricing.score += 5; pricing.good.push('Used Finance Team hold technique — builds authority and creates real pause');
   } else if (agentPriceIdx > -1 && call.duration > 300) {
-    pricing.bad.push('Should use "let me check with Finance" before presenting offer — creates pause and legitimacy');
+    pricing.bad.push('Should use "Let me run this by my Finance Team" with an actual 60-second hold before presenting offer');
   }
 
-  // Did agent ask seller's expectation (but AFTER anchoring per training)?
-  if (agentAskIdx > -1) {
-    if (agentPriceIdx > -1 && agentPriceIdx < agentAskIdx) {
-      pricing.score += 4; pricing.good.push('Anchored first, then asked seller\'s number — correct sequence per training');
-    } else {
-      pricing.score += 2; pricing.bad.push('Asked seller\'s price expectation BEFORE anchoring — training says anchor first, then ask');
-    }
+  // "Grab a pen" technique
+  if (/grab a pen|write this down|pen and paper|got a pen/.test(agentText)) {
+    pricing.score += 2; pricing.good.push('Used "grab a pen" — "People see numbers, they don\'t hear them"');
   }
 
-  // Left room to increase based on photos/condition
-  if (/come up|increase|more|better.*offer|pictures.*more|photos.*adjust|always offer.*more|could go (up|higher)|get them (up|to approve)/.test(agentText)) {
-    pricing.score += 3; pricing.good.push('Left room to increase — smart framing tied to photos/condition verification');
+  // Odd/specific numbers ($64,355 not $64,000)
+  if (/\$\d{2,3},\d{3}(?!,000\b)|\d{2,3},\d{2}[1-9]/.test(agentText)) {
+    pricing.score += 2; pricing.good.push('Used specific/odd offer number — builds finality and credibility');
   }
 
-  // Seller should feel they won
-  if (/work.*for you|does that.*work|how.*feel|how.*sound|what.*think about that/.test(agentText)) {
-    pricing.score += 3; pricing.good.push('Checked seller\'s reaction — "The seller must feel they won"');
+  // Good-faith framing: "This number is a good-faith offer based on what you told me"
+  if (/good.faith|based on what you.*(told|shared)|contingent.*condition|verify.*condition|once we verify/.test(agentText)) {
+    pricing.score += 2; pricing.good.push('Framed offer as good-faith estimate contingent on verification');
+  }
+
+  // Give-to-Get negotiation: "If I can get them to come up, would you be able to..."
+  if (/if i (can|could) get.*(come up|move|closer|approve)|would you be able to|clean.*out|make a decision today|have.*fixed/.test(agentText)) {
+    pricing.score += 3; pricing.good.push('Used Give-to-Get — traded value for value in negotiation');
+  }
+
+  // Didn't negotiate against self
+  if (/flexibility|how did you come up with|where.*you.*getting|what.*based on/.test(agentText)) {
+    pricing.score += 2; pricing.good.push('Didn\'t negotiate against self — asked seller to justify their number');
+  }
+
+  // Checked seller reaction
+  if (/work.*for you|does that.*work|how.*feel|how.*sound|what.*think|would that work/.test(agentText)) {
+    pricing.score += 2; pricing.good.push('Checked seller\'s reaction to offer');
   } else if (agentPriceIdx > -1) {
-    pricing.bad.push('Gave a number but didn\'t check how seller feels — seller must feel they won');
+    pricing.bad.push('Gave offer without checking seller reaction — seller must feel they won');
+  }
+
+  // "Too close not to do business" close
+  if (/too close|not to do business|we.re (so )?close/.test(agentText)) {
+    pricing.score += 1; pricing.good.push('Used "We\'re too close not to do business together" close');
   }
   categories.push(pricing);
 
-  // 7. CALL CONTROL & TONE (10 pts)
-  let control = { name:'Call Control & Diagnostician Tone', max:10, score:0, good:[], bad:[] };
-  // Diagnostician vs pitch person
+  // 7. OBJECTION HANDLING (Step 10) — 10 pts
+  let objections = { name:'Step 10: Objection Handling', max:10, score:0, good:[], bad:[] };
+  const sellerObjected = /(not interested|too low|need to think|think about it|talk to|let me think|not sure|way too low|that.*low|i('d| would) need more|can't do that)/.test(callerText);
+  if (sellerObjected) {
+    // Step 1: Acknowledge
+    if (/understand|totally understand|big decision|no worries|not.*rush/.test(agentText)) {
+      objections.score += 2; objections.good.push('Step 1: Acknowledged — "I totally understand, it\'s a big decision"');
+    } else { objections.bad.push('Missing Step 1: Acknowledge — "I totally understand, it\'s a big decision"'); }
+    // Step 2: Clarify
+    if (/mainly the number|the timing|something else|holding you back|which.*closest|one of three things|what specifically/.test(agentText)) {
+      objections.score += 2; objections.good.push('Step 2: Clarified real objection — "Is it the number, timing, or something else?"');
+    } else { objections.bad.push('Missing Step 2: Clarify — "Is it mainly the number, the timing, or something else holding you back?"'); }
+    // Step 3: Mirror
+    if (/if i were in your shoes|makes sense|feel the same/.test(agentText)) {
+      objections.score += 1; objections.good.push('Step 3: Mirrored — "If I were in your shoes, I\'d feel the same way"');
+    }
+    // Step 4: Re-anchor to motivation
+    if (/earlier you mentioned|you (said|mentioned|told me)|has anything changed|still.*want/.test(agentText)) {
+      objections.score += 2; objections.good.push('Step 4: Re-anchored to seller\'s original motivation');
+    } else { objections.bad.push('Missing Step 4: Re-anchor — "Earlier you mentioned [pain]. Has anything changed there?"'); }
+    // Step 5: Conditional flexibility
+    if (/if i could get.*move|adjust.*closing|closer to what you|fit your timeline/.test(agentText)) {
+      objections.score += 1; objections.good.push('Step 5: Offered conditional flexibility');
+    }
+    // Step 6: Close the loop
+    if (/valid for|in writing|72 hours|lock.*in|send.*offer/.test(agentText)) {
+      objections.score += 1; objections.good.push('Step 6: Closed the loop — sent offer in writing or set deadline');
+    }
+    // Step 7: Value reframe
+    if (/listing|repairs|showings|commissions|months of uncertainty|convenience.*speed|time.*stress.*risk/.test(agentText)) {
+      objections.score += 1; objections.good.push('Step 7: Reframed value — listing vs. speed/convenience/certainty');
+    }
+  } else {
+    // No objection — give partial credit
+    objections.score += 5;
+  }
+  categories.push(objections);
+
+  // 8. CLOSE & NEXT STEPS (Steps 11-13) — 10 pts
+  let close = { name:'Steps 11-13: Close & Next Steps', max:10, score:0, good:[], bad:[] };
+  // Contract sent / reviewed
+  if (/contract|agreement|paperwork|docusign|pandadoc|sign|review.*agreement|walk.*through|email.*agreement|send.*agreement/.test(agentText)) {
+    close.score += 3; close.good.push('Moved to contract — sent or reviewed agreement');
+  }
+  // Email collected for agreement
+  if (/email.*address|best email|send.*email|what.*email/.test(agentText)) {
+    close.score += 1; close.good.push('Collected email for agreement delivery');
+  }
+  // Photos / photographer scheduled
+  if (/photo|picture|photographer|walkthrough|schedule.*(come out|visit|rep)|send.*rep|local.*rep/.test(agentText)) {
+    close.score += 2; close.good.push('Set up photos or photographer visit');
+  } else if (call.duration > 600) { close.bad.push('No photos/photographer scheduled — must verify condition before closing'); }
+  // Next steps outlined
+  if (/next step|here.s what happens|process.*from here|underwriter|title|closing date|wired|signing/.test(agentText)) {
+    close.score += 2; close.good.push('Outlined next steps in the process');
+  }
+  // Follow-up set
+  if (/follow.?up|call.*(back|you)|reach out|talk.*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week|later today|this evening)/.test(agentText)) {
+    close.score += 1; close.good.push('Set specific follow-up time');
+  } else if (call.duration > 300 && !/contract|agreement/.test(agentText)) {
+    close.bad.push('No follow-up scheduled and no contract sent — always close with next steps');
+  }
+  // Contact info shared
+  if (/my (direct|number|contact|cell)|text.*info|write down my|contact info/.test(agentText)) {
+    close.score += 1; close.good.push('Shared direct contact info with seller');
+  }
+  categories.push(close);
+
+  // 9. CALL CONTROL & TONE — 5 pts
+  let control = { name:'Tone & Call Control', max:5, score:0, good:[], bad:[] };
   const agentWordCount = agentText.split(/\s+/).length;
   const callerWordCount = callerText.split(/\s+/).length;
   const listenRatio = callerWordCount / (agentWordCount + callerWordCount + 1);
-  if (listenRatio > 0.35) { control.score += 3; control.good.push(`Good listen ratio (${Math.round(listenRatio*100)}% seller talk) — diagnostician approach`); }
-  else if (listenRatio < 0.2 && call.duration > 180) { control.bad.push(`Agent dominated (${Math.round((1-listenRatio)*100)}% agent talk) — should listen more, diagnose, not pitch`); }
+  if (listenRatio > 0.30) { control.score += 2; control.good.push(`Good listen ratio (${Math.round(listenRatio*100)}% seller talk) — diagnostic approach`); }
+  else if (listenRatio < 0.15 && call.duration > 180) { control.bad.push(`Agent dominated conversation (${Math.round((1-listenRatio)*100)}% agent talk) — listen more, diagnose, don't pitch`); }
   else { control.score += 1; }
-
-  // Filler words
   const fillers = (agentText.match(/\b(um|uh|oh geez|oh gee|like,|you know,|honestly|basically)\b/g) || []).length;
-  if (fillers <= 2) { control.score += 2; control.good.push('Minimal filler words — professional delivery'); }
-  else { control.bad.push(`${fillers} filler words — undermines calm, confident tone`); }
-
-  // Internal system issues exposed
+  if (fillers <= 2) { control.score += 1; control.good.push('Clean delivery — minimal filler words'); }
+  else { control.bad.push(`${fillers} filler words — undermines confident, professional tone`); }
   if (/messed up|not working|system.*down|can't find|not popping|broken|glitch/.test(agentText)) {
-    control.bad.push('Exposed internal system issues to seller — keep it behind the scenes');
-  } else { control.score += 2; }
-
-  // Call length appropriateness
-  if (call.duration > 180 && call.duration < 1500) { control.score += 2; control.good.push('Good call length — thorough diagnostic'); }
-  else if (call.duration <= 120) { control.bad.push('Call too short for proper Four Pillars diagnostic'); }
-  else if (call.duration >= 1500) { control.bad.push('Call over 25 minutes — tighten control, stay focused on Four Pillars'); }
-
-  // Neutral/concerned emotional register
-  if (/that.*(concern|worry)|let me make sure|want to make sure|i.*(want to|need to).*understand/.test(agentText)) {
-    control.score += 1; control.good.push('Used concerned/neutral register — "I want to make sure we\'re aligned"');
-  }
+    control.bad.push('Exposed internal system issues to seller');
+  } else { control.score += 1; }
+  if (call.duration >= 180 && call.duration <= 1500) { control.score += 1; }
+  else if (call.duration < 120) { control.bad.push('Call too short for full 13-step process'); }
   categories.push(control);
-
-  // 8. CLOSE, NEXT STEPS & CONTRACT (10 pts) — Steps 10-13
-  let close = { name:'Close & Next Steps', max:10, score:0, good:[], bad:[] };
-  // Follow-up scheduled
-  if (/follow.?up|reach out|call.*(back|you (on|this))|talk.*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week|later today|this afternoon|this evening|tonight)/.test(agentText)) {
-    close.score += 3; close.good.push('Set specific follow-up time');
-  } else if (call.duration > 300) { close.bad.push('No clear follow-up scheduled — always set a specific callback time'); }
-
-  // Contact info confirmed
-  if (/text|send.*(info|contact|my number|direct)/.test(agentText)) { close.score += 2; close.good.push('Sending contact info via text/email'); }
-
-  // Photos or access secured
-  if (/send.*photo|take.*photo|lock.?box|get.*picture|saturday.*photo|photo.*remind/.test(agentText)) {
-    close.score += 3; close.good.push('Secured commitment for photos or property access');
-  }
-
-  // Contract mentioned / walk-through
-  if (/contract|paperwork|agreement|docusign|pandadoc|sign/.test(agentText)) {
-    close.score += 2; close.good.push('Moved toward contract');
-  }
-
-  // Objection handling (7-step pattern elements)
-  if (/(not interested|too low|need to think|talk to|think about it)/.test(callerText)) {
-    if (/understand|appreciate|help me understand|what specifically|what part/.test(agentText)) {
-      close.score += 2; close.good.push('Used objection handling — acknowledged and clarified the stall');
-    } else {
-      close.bad.push('Seller objected but agent didn\'t follow 7-step objection sequence — acknowledge, clarify, reframe');
-    }
-  }
-  categories.push(close);
 
   // ============================================================
   // SCORING
@@ -636,7 +724,27 @@ function renderDetail(call) {
   const circumference = 2 * Math.PI * 42;
   const offset = circumference - (analysis.pct / 100) * circumference;
 
-  const analysisHTML = analysis.categories.map(cat => {
+  function catGrade(pct) {
+    if (pct >= 90) return {g:'A',c:'var(--green)'};
+    if (pct >= 70) return {g:'B',c:'var(--green)'};
+    if (pct >= 50) return {g:'C',c:'var(--yellow)'};
+    if (pct >= 30) return {g:'D',c:'var(--orange)'};
+    return {g:'F',c:'var(--red)'};
+  }
+
+  const summaryHTML = analysis.categories.map(cat => {
+    const catPct = cat.max > 0 ? Math.round((cat.score/cat.max)*100) : 0;
+    const {g,c} = catGrade(catPct);
+    return `
+      <div class="summary-row">
+        <div class="cat-grade" style="color:${c}">${g}</div>
+        <div class="cat-name">${cat.name}</div>
+        <div class="cat-bar-wrap"><div class="cat-bar" style="width:${catPct}%;background:${c}"></div></div>
+        <div class="cat-score" style="color:${c}">${cat.score}/${cat.max}</div>
+      </div>`;
+  }).join('');
+
+  const detailedHTML = analysis.categories.map(cat => {
     const catPct = cat.max > 0 ? Math.round((cat.score/cat.max)*100) : 0;
     let pillColor = catPct >= 70 ? 'var(--green)' : catPct >= 40 ? 'var(--yellow)' : 'var(--red)';
     return `
@@ -676,9 +784,26 @@ function renderDetail(call) {
         <div class="grade-label" style="color:${analysis.gradeColor}">${analysis.grade}</div>
         <div class="grade-score">${analysis.totalScore}/${analysis.totalMax} (${analysis.pct}%)</div>
       </div>
-      ${analysisHTML}
+      <div class="analysis-tabs">
+        <button class="analysis-tab active" data-tab="summary">Summary</button>
+        <button class="analysis-tab" data-tab="detailed">Detailed</button>
+      </div>
+      <div class="tab-content active" id="tab-summary">
+        <div class="summary-grid">${summaryHTML}</div>
+      </div>
+      <div class="tab-content" id="tab-detailed">
+        ${detailedHTML}
+      </div>
     </div>
   `;
+  panel.querySelectorAll('.analysis-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      panel.querySelectorAll('.analysis-tab').forEach(t => t.classList.remove('active'));
+      panel.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      panel.querySelector('#tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
 }
 
 init();

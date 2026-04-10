@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+const MERGE_MODE = process.argv.includes('--merge');
+
 const FIELDS = [
   'duration', 'start_time', 'direction', 'customer_phone_number', 'customer_name',
   'transcription', 'call_summary', 'source', 'recording', 'note', 'business_phone_number',
@@ -143,14 +145,42 @@ async function fetchAllCalls() {
 
   console.log(`Five9 agent matched: ${matched}/${withTranscripts.length} calls`);
 
+  // Merge mode: preserve Five9 agent data from existing calls.json for calls
+  // that were previously matched (useful when running from CI without DB access)
+  let finalCalls = calls;
+  const outPath = path.join(__dirname, 'calls.json');
+
+  if (MERGE_MODE && fs.existsSync(outPath)) {
+    console.log('\n--merge: Merging with existing calls.json...');
+    try {
+      const existing = JSON.parse(fs.readFileSync(outPath, 'utf-8'));
+      const existingMap = {};
+      for (const c of (existing.calls || [])) {
+        existingMap[c.id] = c;
+      }
+      let preserved = 0;
+      finalCalls = calls.map(c => {
+        const prev = existingMap[c.id];
+        // If this call had Five9 data before but doesn't now, keep the old Five9 fields
+        if (prev && prev.agent_name && !c.agent_name) {
+          preserved++;
+          return { ...c, agent_email: prev.agent_email, agent_name: prev.agent_name, five9_disposition: prev.five9_disposition };
+        }
+        return c;
+      });
+      console.log(`  Preserved Five9 agent data for ${preserved} calls`);
+    } catch (err) {
+      console.warn('  Warning: Could not merge:', err.message);
+    }
+  }
+
   const output = {
     generated_at: new Date().toISOString(),
     total_calls: allCalls.length,
     calls_with_transcripts: withTranscripts.length,
-    calls
+    calls: finalCalls
   };
 
-  const outPath = path.join(__dirname, 'calls.json');
   fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
   console.log(`\nSaved to ${outPath}`);
 }
