@@ -24,8 +24,9 @@
   body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; font-size:14px; }
 
   /* Header */
-  .header { background:var(--surface); border-bottom:1px solid var(--border); padding:16px 24px; display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:100; }
-  .header h1 { font-size:18px; font-weight:700; white-space:nowrap; }
+  .header { background:var(--surface); border-bottom:1px solid var(--border); padding:0; position:sticky; top:0; z-index:100; }
+  .header-top { display:flex; align-items:center; gap:16px; padding:12px 24px; }
+  .header h1 { font-size:18px; font-weight:700; white-space:nowrap; cursor:pointer; }
   .header h1 span { color:var(--accent); }
   .search-box { flex:1; max-width:500px; position:relative; }
   .search-box input { width:100%; padding:10px 14px 10px 38px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; outline:none; transition:border-color .2s; }
@@ -33,6 +34,17 @@
   .search-box svg { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text2); }
   .stats { color:var(--text2); font-size:13px; white-space:nowrap; }
   .stats b { color:var(--text); }
+  .header-nav { display:flex; align-items:center; gap:0; padding:0 24px; border-top:1px solid var(--border); }
+  .header-nav .nav-btn { padding:10px 20px; font-size:13px; font-weight:700; cursor:pointer; border:none; background:none; color:var(--text2); border-bottom:3px solid transparent; transition:all .15s; text-transform:uppercase; letter-spacing:.5px; }
+  .header-nav .nav-btn:hover { color:var(--text); }
+  .header-nav .nav-btn.active-acq { color:var(--accent); border-bottom-color:var(--accent); }
+  .header-nav .nav-btn.active-dispo { color:var(--purple); border-bottom-color:var(--purple); }
+  .header-nav .nav-btn.home-active { color:var(--text); border-bottom-color:var(--text); }
+  .header-nav .nav-sep { width:1px; height:20px; background:var(--border); margin:0 8px; }
+  .header-nav .nav-filters { display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .header-nav .nav-filters .filter-label { font-size:10px; }
+  .header-nav .nav-toggle { font-size:11px; color:var(--text2); cursor:pointer; display:flex; align-items:center; gap:4px; }
+  .header-nav .nav-toggle input { cursor:pointer; }
   .filter-bar { display:flex; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid var(--border); background:var(--surface); flex-wrap:wrap; }
   .filter-btn { padding:5px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; color:var(--text2); cursor:pointer; font-size:12px; transition:all .15s; }
   .filter-btn:hover { border-color:var(--accent); color:var(--text); }
@@ -43,6 +55,43 @@
   .call-item .source-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; margin-left:4px; vertical-align:middle; }
   .call-item .source-badge.callrail { background:rgba(79,140,255,.15); color:var(--accent); }
   .call-item .source-badge.zoom { background:rgba(167,139,250,.15); color:var(--purple); }
+
+  /* Landing page */
+  .landing { padding:32px; overflow-y:auto; flex:1; }
+  .landing-header { margin-bottom:28px; }
+  .landing-header h2 { font-size:22px; font-weight:700; margin-bottom:4px; }
+  .landing-header p { color:var(--text2); font-size:14px; }
+  .stat-cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:16px; margin-bottom:28px; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; }
+  .stat-card .stat-label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+  .stat-card .stat-value { font-size:28px; font-weight:800; }
+  .stat-card .stat-sub { font-size:12px; color:var(--text2); margin-top:4px; }
+  .dept-cards { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:28px; }
+  .dept-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; cursor:pointer; transition:all .2s; }
+  .dept-card:hover { border-color:var(--accent); transform:translateY(-2px); box-shadow:0 4px 20px rgba(0,0,0,.3); }
+  .dept-card.acq { border-left:4px solid var(--accent); }
+  .dept-card.dispo { border-left:4px solid var(--purple); }
+  .dept-card h3 { font-size:18px; font-weight:700; margin-bottom:8px; }
+  .dept-card.acq h3 { color:var(--accent); }
+  .dept-card.dispo h3 { color:var(--purple); }
+  .dept-card .dept-stats { display:flex; gap:20px; margin-bottom:12px; }
+  .dept-card .dept-stat { text-align:center; }
+  .dept-card .dept-stat .ds-val { font-size:24px; font-weight:800; }
+  .dept-card .dept-stat .ds-label { font-size:11px; color:var(--text2); text-transform:uppercase; }
+  .dept-card .top-reps { margin-top:12px; }
+  .dept-card .top-rep { display:flex; align-items:center; gap:8px; padding:6px 0; font-size:13px; }
+  .dept-card .top-rep .rank { color:var(--text2); font-size:11px; min-width:18px; }
+  .dept-card .top-rep .rep-n { flex:1; font-weight:500; }
+  .dept-card .top-rep .rep-c { color:var(--text2); font-size:12px; }
+  .recent-section { margin-bottom:28px; }
+  .recent-section h3 { font-size:15px; font-weight:600; margin-bottom:12px; color:var(--text2); }
+  .recent-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
+  .recent-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px; cursor:pointer; transition:background .15s; }
+  .recent-card:hover { background:var(--surface2); }
+  .recent-card .rc-top { display:flex; justify-content:space-between; margin-bottom:6px; }
+  .recent-card .rc-name { font-weight:600; font-size:14px; }
+  .recent-card .rc-dur { color:var(--green); font-size:13px; }
+  .recent-card .rc-meta { color:var(--text2); font-size:12px; }
 
   /* Department tabs */
   .dept-tabs { display:flex; border-bottom:1px solid var(--border); background:var(--surface); }
@@ -62,6 +111,9 @@
   .rep-list { flex:1; overflow-y:auto; }
   .rep-item { padding:14px 18px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .15s; display:flex; align-items:center; gap:12px; }
   .rep-item:hover { background:var(--surface2); }
+  .rep-item.active { background:var(--surface2); }
+  .rep-item.active.acq { border-left:3px solid var(--accent); }
+  .rep-item.active.dispo { border-left:3px solid var(--purple); }
   .rep-item .rep-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0; }
   .rep-item.acq .rep-avatar { background:rgba(79,140,255,.15); color:var(--accent); }
   .rep-item.dispo .rep-avatar { background:rgba(167,139,250,.15); color:var(--purple); }
@@ -71,14 +123,17 @@
   .rep-item .rep-calls { font-size:13px; font-weight:700; color:var(--text2); white-space:nowrap; }
   .rep-item .rep-avg-grade { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; margin-left:8px; }
 
-  /* Main layout */
-  .container { display:flex; height:calc(100vh - 57px); min-height:0; }
-  .list-panel { width:420px; min-width:320px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+  /* Main layout — 3 columns: Reps | Calls | Detail */
+  .container { display:flex; height:calc(100vh - 90px); min-height:0; }
+  .container.landing-mode { display:block; overflow-y:auto; }
+  .reps-panel { width:240px; min-width:200px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+  .calls-panel { width:360px; min-width:280px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
   .detail-panel { flex:1; display:flex; overflow:hidden; min-height:0; }
   .detail-panel.empty { align-items:center; justify-content:center; }
   .empty-state { text-align:center; color:var(--text2); }
   .empty-state svg { margin-bottom:12px; opacity:.4; }
   .empty-state p { font-size:15px; }
+  .panel-header { padding:10px 14px; border-bottom:1px solid var(--border); background:var(--surface); font-size:12px; color:var(--text2); font-weight:600; text-transform:uppercase; letter-spacing:.5px; display:flex; align-items:center; justify-content:space-between; }
 
   /* Call list */
   .call-list { flex:1; overflow-y:auto; }
@@ -170,26 +225,51 @@
 <body>
 
 <div class="header">
-  <h1>Rebuilt <span>Call Dashboard</span></h1>
-  <div class="search-box">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-    <input type="text" id="searchInput" placeholder="Search by name, phone, or agent...">
+  <div class="header-top">
+    <h1 onclick="showLanding()">Rebuilt <span>Call Dashboard</span></h1>
+    <div class="search-box">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" id="searchInput" placeholder="Search name, phone, address, or rep...">
+    </div>
+    <div class="stats" id="stats"></div>
   </div>
-  <div class="stats" id="stats"></div>
+  <div class="header-nav" id="headerNav">
+    <button class="nav-btn home-active" data-nav="home" onclick="showLanding()">Home</button>
+    <button class="nav-btn" data-nav="acquisition" onclick="enterDepartment('acquisition')">Acquisition</button>
+    <button class="nav-btn" data-nav="disposition" onclick="enterDepartment('disposition')">Disposition</button>
+    <div class="nav-filters" id="navFilters" style="display:none;">
+      <div class="nav-sep"></div>
+      <span class="filter-label">Duration:</span>
+      <button class="filter-btn active" data-min="0" onclick="setDurationFilter(0)">All</button>
+      <button class="filter-btn" data-min="120" onclick="setDurationFilter(120)">2m+</button>
+      <button class="filter-btn" data-min="300" onclick="setDurationFilter(300)">5m+</button>
+      <button class="filter-btn" data-min="600" onclick="setDurationFilter(600)">10m+</button>
+      <div class="nav-sep"></div>
+      <label class="nav-toggle" id="internalToggle" style="display:none;">
+        <input type="checkbox" onchange="toggleInternal(this.checked)"> Show internal
+      </label>
+    </div>
+  </div>
 </div>
 
-<div class="container">
-  <div class="list-panel">
-    <div class="dept-tabs">
-      <button class="dept-tab acq active" onclick="setDepartment('acquisition')">Acquisition</button>
-      <button class="dept-tab dispo" onclick="setDepartment('disposition')">Disposition</button>
+<div class="container" id="mainContainer">
+  <!-- Landing page (shown by default) -->
+  <div id="landingPage" class="landing" style="flex:1;">
+    <div class="loading"><div class="spinner"></div>Loading calls...</div>
+  </div>
+
+  <!-- 3-column drill view (hidden until dept selected) -->
+  <div class="reps-panel" id="repsPanel" style="display:none;">
+    <div class="panel-header"><span>Reps</span><span id="repCount"></span></div>
+    <div class="rep-list" id="repList"></div>
+  </div>
+  <div class="calls-panel" id="callsPanel" style="display:none;">
+    <div class="panel-header">
+      <span id="callsPanelTitle">Calls</span>
+      <span id="callsCount"></span>
     </div>
-    <div id="breadcrumb" class="breadcrumb" style="display:none;"></div>
     <div id="subFilters" class="filter-bar" style="display:none;"></div>
-    <div class="rep-list" id="repList">
-      <div class="loading"><div class="spinner"></div>Loading calls...</div>
-    </div>
-    <div class="call-list" id="callList" style="display:none;"></div>
+    <div class="call-list" id="callList"></div>
     <div class="pagination" id="pagination"></div>
   </div>
   <div class="detail-panel empty" id="detailPanel">
@@ -212,22 +292,26 @@ let minDuration = 0;
 let department = 'acquisition'; // 'acquisition' or 'disposition'
 let selectedRep = null;         // null = show rep list, string = show that rep's calls
 let callTypeFilter = 'all';
+let showInternal = false;  // exclude intra-company calls by default
 
 function extractAgentName(call) {
   if (call.agent_name) return call.agent_name;
   if (!call.transcript) return '';
   const m = call.transcript.match(/(?:this is|my name is|i'm|i am)\s+([A-Z][a-z]+)/i);
-  if (m && !['Business','Thank','This','Your','An'].includes(m[1])) return m[1];
+  if (m && !['Business','Thank','This','Your','An','Correct','Sure','Great','Well','Just','Ready','About','Here','There','Actually'].includes(m[1])) return m[1];
   return '';
 }
 
-// Classify a call as acquisition or disposition
+// Classify a call as acquisition or disposition using DB user roles ONLY
 function classifyDepartment(call) {
-  // Zoom Phone = disposition team
+  // Strict: use agent_department from DB user roles
+  if (call.agent_department === 'acquisition') return 'acquisition';
+  if (call.agent_department === 'disposition') return 'disposition';
+  // If agent has a role but it's not acq/dispo (e.g. Transaction Coordinator), skip
+  if (call.agent_role && !/acquisition|inside sales|disposition|associate sales/i.test(call.agent_role)) return 'other';
+  // Fallback for calls without DB role match: use source system
   if (call.source_system === 'zoom_phone') return 'disposition';
-  // Five9 "Transferred to Dispo Agent" = dispo
   if (/transfer.*dispo|dispo.*agent/i.test(call.five9_disposition || '')) return 'disposition';
-  // CallRail/Five9 = acquisition team
   return 'acquisition';
 }
 
@@ -284,25 +368,223 @@ async function init() {
 
     allCalls = [...crCalls, ...zmCalls].sort((a,b) => new Date(b.start_time) - new Date(a.start_time));
 
-    // Tag each call with department and call type
+    // Build set of known agent names for internal call detection + name merging
+    const agentNames = new Set();
+    const fullAgentNames = {};  // first name → full name mapping
+    allCalls.forEach(c => {
+      if (c.agent_name) {
+        agentNames.add(c.agent_name.toLowerCase());
+        // Track full names (has space = full name)
+        if (c.agent_name.includes(' ')) {
+          const first = c.agent_name.split(' ')[0].toLowerCase();
+          if (!fullAgentNames[first]) fullAgentNames[first] = {};
+          fullAgentNames[first][c.agent_name] = (fullAgentNames[first][c.agent_name] || 0) + 1;
+        }
+      }
+    });
+    // Merge first-name-only agent names to their most common full name
+    allCalls.forEach(c => {
+      if (c.agent_name && !c.agent_name.includes(' ')) {
+        const first = c.agent_name.toLowerCase();
+        const matches = fullAgentNames[first];
+        if (matches) {
+          // Pick the full name with the most occurrences
+          const best = Object.entries(matches).sort((a,b) => b[1] - a[1])[0];
+          if (best) c.agent_name = best[0];
+        }
+      }
+    });
+
+    // Tag each call with department, call type, and internal flag
     allCalls.forEach(c => {
       c._dept = classifyDepartment(c);
       c._callType = getCallType(c);
+      // Internal: use DB flag (number_type=1 both sides), or fallback to name matching
+      const custName = (c.customer_name || '').toLowerCase();
+      c._internal = c.internal === true || (c.source_system === 'zoom_phone' && custName && agentNames.has(custName));
     });
 
     console.log(`Loaded ${crCalls.length} CallRail + ${zmCalls.length} Zoom Phone = ${allCalls.length} total calls`);
-    renderView();
+    renderLanding();
   } catch (e) {
     document.getElementById('repList').innerHTML = '<div class="loading" style="color:var(--red)">Failed to load call data</div>';
   }
 }
 
+function showLanding() {
+  document.getElementById('landingPage').style.display = '';
+  document.getElementById('repsPanel').style.display = 'none';
+  document.getElementById('callsPanel').style.display = 'none';
+  document.getElementById('navFilters').style.display = 'none';
+  document.getElementById('mainContainer').classList.add('landing-mode');
+  // Reset detail panel
+  const dp = document.getElementById('detailPanel');
+  dp.classList.add('empty');
+  dp.style.display = 'none';
+  dp.innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.05 5A5 5 0 0119 8.95M15.05 1A9 9 0 0123 8.94M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><p>Select a call to view transcript & analysis</p></div>';
+  // Update nav
+  document.querySelectorAll('.nav-btn').forEach(b => b.className = 'nav-btn' + (b.dataset.nav === 'home' ? ' home-active' : ''));
+  selectedRep = null;
+  selectedCallId = null;
+  renderLanding();
+}
+
+function renderLanding() {
+  const landing = document.getElementById('landingPage');
+  const acqCalls = allCalls.filter(c => c._dept === 'acquisition' && c.duration >= 60);
+  const dispoCalls = allCalls.filter(c => c._dept === 'disposition' && !c._internal && c.duration >= 60);
+  const totalCalls = acqCalls.length + dispoCalls.length;
+
+  // Today's calls
+  const today = new Date().toISOString().split('T')[0];
+  const todayAcq = acqCalls.filter(c => c.start_time && c.start_time.startsWith(today));
+  const todayDispo = dispoCalls.filter(c => c.start_time && c.start_time.startsWith(today));
+
+  // This week
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekAcq = acqCalls.filter(c => new Date(c.start_time) >= weekAgo);
+  const weekDispo = dispoCalls.filter(c => new Date(c.start_time) >= weekAgo);
+
+  // Top reps per dept
+  function topReps(calls, n) {
+    const map = {};
+    calls.forEach(c => {
+      const rep = c.agent_name || 'Unknown';
+      if (!map[rep]) map[rep] = 0;
+      map[rep]++;
+    });
+    return Object.entries(map).sort((a,b) => b[1] - a[1]).slice(0, n);
+  }
+
+  const acqTopReps = topReps(acqCalls, 5);
+  const dispoTopReps = topReps(dispoCalls, 5);
+
+  // Unique acq/dispo rep counts
+  const acqReps = new Set(acqCalls.map(c => c.agent_name || 'Unknown'));
+  const dispoReps = new Set(dispoCalls.map(c => c.agent_name || 'Unknown'));
+
+  // Avg duration
+  const avgAcqDur = acqCalls.length ? Math.round(acqCalls.reduce((s,c) => s + c.duration, 0) / acqCalls.length) : 0;
+  const avgDispoDur = dispoCalls.length ? Math.round(dispoCalls.reduce((s,c) => s + c.duration, 0) / dispoCalls.length) : 0;
+
+  // Recent notable calls (long calls from today/yesterday)
+  const recentNotable = [...acqCalls, ...dispoCalls]
+    .filter(c => c.duration > 300)
+    .sort((a,b) => new Date(b.start_time) - new Date(a.start_time))
+    .slice(0, 6);
+
+  landing.innerHTML = `
+    <div class="landing-header">
+      <h2>Call Dashboard Overview</h2>
+      <p>${totalCalls.toLocaleString()} calls with transcripts</p>
+    </div>
+
+    <div class="stat-cards">
+      <div class="stat-card">
+        <div class="stat-label">Today</div>
+        <div class="stat-value">${todayAcq.length + todayDispo.length}</div>
+        <div class="stat-sub">${todayAcq.length} acq / ${todayDispo.length} dispo</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">This Week</div>
+        <div class="stat-value">${weekAcq.length + weekDispo.length}</div>
+        <div class="stat-sub">${weekAcq.length} acq / ${weekDispo.length} dispo</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Duration</div>
+        <div class="stat-value" style="font-size:22px;">${formatDuration(avgAcqDur)} / ${formatDuration(avgDispoDur)}</div>
+        <div class="stat-sub">acq / dispo</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Reps</div>
+        <div class="stat-value">${acqReps.size + dispoReps.size}</div>
+        <div class="stat-sub">${acqReps.size} acq / ${dispoReps.size} dispo</div>
+      </div>
+    </div>
+
+    <div class="dept-cards">
+      <div class="dept-card acq" onclick="enterDepartment('acquisition')">
+        <h3>Acquisition</h3>
+        <div class="dept-stats">
+          <div class="dept-stat"><div class="ds-val">${acqReps.size}</div><div class="ds-label">Reps</div></div>
+          <div class="dept-stat"><div class="ds-val">${acqCalls.length}</div><div class="ds-label">Calls</div></div>
+          <div class="dept-stat"><div class="ds-val">${formatDuration(avgAcqDur)}</div><div class="ds-label">Avg</div></div>
+        </div>
+        <div class="top-reps">
+          ${acqTopReps.map(([name, count], i) => `
+            <div class="top-rep"><span class="rank">${i+1}.</span><span class="rep-n">${name}</span><span class="rep-c">${count} calls</span></div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="dept-card dispo" onclick="enterDepartment('disposition')">
+        <h3>Disposition</h3>
+        <div class="dept-stats">
+          <div class="dept-stat"><div class="ds-val">${dispoReps.size}</div><div class="ds-label">Reps</div></div>
+          <div class="dept-stat"><div class="ds-val">${dispoCalls.length}</div><div class="ds-label">Calls</div></div>
+          <div class="dept-stat"><div class="ds-val">${formatDuration(avgDispoDur)}</div><div class="ds-label">Avg</div></div>
+        </div>
+        <div class="top-reps">
+          ${dispoTopReps.map(([name, count], i) => `
+            <div class="top-rep"><span class="rank">${i+1}.</span><span class="rep-n">${name}</span><span class="rep-c">${count} calls</span></div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+
+    ${recentNotable.length ? `
+    <div class="recent-section">
+      <h3>Recent Notable Calls (5m+)</h3>
+      <div class="recent-grid">
+        ${recentNotable.map(c => {
+          const outcome = classifyOutcome(c);
+          const isZoom = c.source_system === 'zoom_phone';
+          return `
+            <div class="recent-card" onclick="enterDepartment('${c._dept}'); setTimeout(() => { selectRep('${(c.agent_name||'Unknown').replace(/'/g,"\\'")}'); setTimeout(() => selectCall('${c.id}'), 100); }, 100);">
+              <div class="rc-top">
+                <span class="rc-name">${c.customer_name || 'Unknown'}</span>
+                <span class="rc-dur">${formatDuration(c.duration)}</span>
+              </div>
+              <div class="rc-meta">${c.agent_name || ''} &middot; ${formatDate(c.start_time)} &middot; <span style="color:${outcome.color}">${outcome.label}</span></div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>` : ''}
+  `;
+
+  document.getElementById('stats').innerHTML = `<b>${totalCalls.toLocaleString()}</b> calls with transcripts`;
+}
+
+function enterDepartment(dept) {
+  document.getElementById('landingPage').style.display = 'none';
+  document.getElementById('mainContainer').classList.remove('landing-mode');
+  document.getElementById('repsPanel').style.display = '';
+  document.getElementById('callsPanel').style.display = '';
+  document.getElementById('detailPanel').style.display = '';
+  document.getElementById('navFilters').style.display = '';
+  setDepartment(dept);
+}
+
 function setDepartment(dept) {
   department = dept;
   selectedRep = null;
+  selectedCallId = null;
   callTypeFilter = 'all';
-  document.querySelectorAll('.dept-tab').forEach(t => t.classList.remove('active'));
-  document.querySelector(`.dept-tab.${dept === 'acquisition' ? 'acq' : 'dispo'}`).classList.add('active');
+  // Reset detail panel
+  const dp = document.getElementById('detailPanel');
+  dp.classList.add('empty');
+  dp.innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.05 5A5 5 0 0119 8.95M15.05 1A9 9 0 0123 8.94M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><p>Select a call to view transcript & analysis</p></div>';
+  // Update header nav
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.className = 'nav-btn';
+    if (b.dataset.nav === dept) b.className = 'nav-btn ' + (dept === 'acquisition' ? 'active-acq' : 'active-dispo');
+  });
+  document.getElementById('internalToggle').style.display = dept === 'disposition' ? '' : 'none';
+  renderView();
+}
+
+function toggleInternal(checked) {
+  showInternal = checked;
   renderView();
 }
 
@@ -310,17 +592,6 @@ function selectRep(repName) {
   selectedRep = repName;
   callTypeFilter = 'all';
   currentPage = 1;
-  renderView();
-}
-
-function backToReps() {
-  selectedRep = null;
-  callTypeFilter = 'all';
-  selectedCallId = null;
-  // Reset detail panel
-  const dp = document.getElementById('detailPanel');
-  dp.classList.add('empty');
-  dp.innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.05 5A5 5 0 0119 8.95M15.05 1A9 9 0 0123 8.94M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><p>Select a call to view transcript & analysis</p></div>';
   renderView();
 }
 
@@ -342,36 +613,33 @@ function getDeptCalls() {
   return allCalls.filter(c => {
     if (c._dept !== department) return false;
     if (c.duration < 60) return false; // minimum 1 min for rep view
+    if (!showInternal && c._internal) return false; // exclude intra-company calls
     if (!q) return true;
     const name = (c.customer_name||'').toLowerCase();
     const phone = (c.customer_phone||'').replace(/\D/g,'');
     const agent = (c.agent_name||'').toLowerCase();
-    return name.includes(q) || phone.includes(q) || agent.includes(q);
+    const addr = (c.prospect_address||'').toLowerCase().replace(/[\s,]/g,'');
+    return name.includes(q) || phone.includes(q) || agent.includes(q) || addr.includes(q);
   });
 }
 
 function renderView() {
+  renderRepList();
   if (selectedRep) {
     renderRepCalls();
   } else {
-    renderRepList();
+    // No rep selected — show "select a rep" in calls panel
+    document.getElementById('callsPanelTitle').textContent = 'Calls';
+    document.getElementById('callList').innerHTML = '<div class="loading" style="font-size:13px;">Select a rep to view calls</div>';
+    document.getElementById('subFilters').style.display = 'none';
+    document.getElementById('pagination').innerHTML = '';
+    document.getElementById('callsCount').textContent = '';
   }
   updateStats();
 }
 
 function renderRepList() {
   const repListEl = document.getElementById('repList');
-  const callListEl = document.getElementById('callList');
-  const breadcrumbEl = document.getElementById('breadcrumb');
-  const subFiltersEl = document.getElementById('subFilters');
-  const paginationEl = document.getElementById('pagination');
-
-  repListEl.style.display = '';
-  callListEl.style.display = 'none';
-  breadcrumbEl.style.display = 'none';
-  subFiltersEl.style.display = 'none';
-  paginationEl.innerHTML = '';
-
   const deptCalls = getDeptCalls();
   const isAcq = department === 'acquisition';
 
@@ -384,10 +652,11 @@ function renderRepList() {
     repMap[rep].totalDuration += c.duration || 0;
   }
 
-  // Sort by call count descending
   const reps = Object.entries(repMap)
     .map(([name, data]) => ({ name, ...data }))
     .sort((a, b) => b.calls.length - a.calls.length);
+
+  document.getElementById('repCount').textContent = reps.length;
 
   if (reps.length === 0) {
     repListEl.innerHTML = '<div class="loading">No reps found</div>';
@@ -396,48 +665,25 @@ function renderRepList() {
 
   repListEl.innerHTML = reps.map(rep => {
     const initials = rep.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-    const avgDur = Math.round(rep.totalDuration / rep.calls.length);
-    const types = {};
-    rep.calls.forEach(c => { types[c._callType] = (types[c._callType] || 0) + 1; });
-    const topTypes = Object.entries(types).sort((a,b) => b[1] - a[1]).slice(0, 3).map(([t,n]) => `${t}: ${n}`).join(', ');
+    const active = selectedRep === rep.name;
 
     return `
-      <div class="rep-item ${isAcq ? 'acq' : 'dispo'}" onclick="selectRep('${rep.name.replace(/'/g, "\\'")}')">
+      <div class="rep-item ${isAcq ? 'acq' : 'dispo'}${active ? ' active' : ''}" onclick="selectRep('${rep.name.replace(/'/g, "\\'")}')">
         <div class="rep-avatar">${initials || '?'}</div>
         <div class="rep-info">
           <div class="rep-name">${rep.name}</div>
-          <div class="rep-meta">
-            <span>Avg ${formatDuration(avgDur)}</span>
-            <span>${topTypes}</span>
-          </div>
+          <div class="rep-meta"><span>${rep.calls.length} calls</span></div>
         </div>
-        <div class="rep-calls">${rep.calls.length} calls</div>
       </div>
     `;
   }).join('');
 }
 
 function renderRepCalls() {
-  const repListEl = document.getElementById('repList');
-  const callListEl = document.getElementById('callList');
-  const breadcrumbEl = document.getElementById('breadcrumb');
   const subFiltersEl = document.getElementById('subFilters');
-  const isAcq = department === 'acquisition';
 
-  repListEl.style.display = 'none';
-  callListEl.style.display = '';
-  breadcrumbEl.style.display = '';
-  subFiltersEl.style.display = '';
-
-  // Breadcrumb
-  breadcrumbEl.innerHTML = `
-    <button class="back-btn" onclick="backToReps()">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-      All Reps
-    </button>
-    <span class="crumb">/</span>
-    <span class="crumb-current" style="color:${isAcq ? 'var(--accent)' : 'var(--purple)'}">${selectedRep}</span>
-  `;
+  // Update calls panel title
+  document.getElementById('callsPanelTitle').textContent = selectedRep || 'Calls';
 
   // Get this rep's calls and compute call types
   const repCalls = getDeptCalls().filter(c => (c.agent_name || 'Unknown') === selectedRep);
@@ -445,18 +691,17 @@ function renderRepCalls() {
   repCalls.forEach(c => { types[c._callType] = (types[c._callType] || 0) + 1; });
   const typeList = Object.entries(types).sort((a,b) => b[1] - a[1]);
 
-  // Sub-filters: call type + duration
-  subFiltersEl.innerHTML = `
-    <span class="filter-label">Type:</span>
-    <button class="filter-btn ${callTypeFilter === 'all' ? 'active' : ''}" onclick="setCallTypeFilter('all')">All (${repCalls.length})</button>
-    ${typeList.map(([t, n]) => `<button class="filter-btn ${callTypeFilter === t ? 'active' : ''}" onclick="setCallTypeFilter('${t}')">${t} (${n})</button>`).join('')}
-    <div class="filter-sep"></div>
-    <span class="filter-label">Duration:</span>
-    <button class="filter-btn ${minDuration === 0 ? 'active' : ''}" data-min="0" onclick="setDurationFilter(0)">All</button>
-    <button class="filter-btn ${minDuration === 120 ? 'active' : ''}" data-min="120" onclick="setDurationFilter(120)">2m+</button>
-    <button class="filter-btn ${minDuration === 300 ? 'active' : ''}" data-min="300" onclick="setDurationFilter(300)">5m+</button>
-    <button class="filter-btn ${minDuration === 600 ? 'active' : ''}" data-min="600" onclick="setDurationFilter(600)">10m+</button>
-  `;
+  // Sub-filters: call type only (duration is in header)
+  if (typeList.length > 1) {
+    subFiltersEl.style.display = '';
+    subFiltersEl.innerHTML = `
+      <span class="filter-label">Type:</span>
+      <button class="filter-btn ${callTypeFilter === 'all' ? 'active' : ''}" onclick="setCallTypeFilter('all')">All (${repCalls.length})</button>
+      ${typeList.map(([t, n]) => `<button class="filter-btn ${callTypeFilter === t ? 'active' : ''}" onclick="setCallTypeFilter('${t}')">${t} (${n})</button>`).join('')}
+    `;
+  } else {
+    subFiltersEl.style.display = 'none';
+  }
 
   applyRepCallFilters();
 }
@@ -469,6 +714,7 @@ function applyRepCallFilters() {
     return true;
   });
   filteredCalls = repCalls;
+  document.getElementById('callsCount').textContent = filteredCalls.length;
   updateStats();
   renderList();
   renderPagination();
@@ -511,8 +757,13 @@ function leadColor(score) {
   return 'var(--red)';
 }
 
-// Search
-document.getElementById('searchInput').addEventListener('input', () => renderView());
+// Search — reset rep selection when search changes so calls panel updates
+document.getElementById('searchInput').addEventListener('input', () => {
+  selectedRep = null;
+  selectedCallId = null;
+  currentPage = 1;
+  renderView();
+});
 
 function classifyZoomOutcome(c, all, dur) {
   // Zoom Phone call types per user: Appointments, Follow Ups, Seller Calls (intro/retrade/flat fee), Investor Outreach
@@ -644,6 +895,7 @@ function renderList() {
         ${c.lead_score ? `<span class="lead-badge" style="background:${leadColor(c.lead_score)}22;color:${leadColor(c.lead_score)}">${c.lead_score}</span>` : ''}
       </div>
       <div class="phone">${formatPhone(c.customer_phone)}${c.agent_name ? ` <span class="agent-name">— ${c.agent_name}</span>` : ''}</div>
+      ${c.prospect_address ? `<div style="color:var(--text2);font-size:11px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.prospect_address}</div>` : ''}
       <div class="meta">
         <span>${formatDate(c.start_time)}</span>
         <span class="duration">${formatDuration(c.duration)}</span>
@@ -731,6 +983,12 @@ function analyzeCall(call) {
   // For Zoom Phone calls, use a different grading rubric
   if (call.source_system === 'zoom_phone') {
     return analyzeZoomCall(call, lines, agentText, callerText, allText);
+  }
+
+  // DNC calls get their own rubric
+  const outcome = classifyOutcome(call);
+  if (outcome.label === 'Do Not Contact') {
+    return analyzeDNCCall(call, lines, agentText, callerText, allText);
   }
 
   const categories = [];
@@ -1040,6 +1298,78 @@ function analyzeCall(call) {
   return { categories, totalScore, totalMax, pct, grade, gradeColor };
 }
 
+function analyzeDNCCall(call, lines, agentText, callerText, allText) {
+  const categories = [];
+
+  // 1. PROFESSIONALISM & COURTESY — 30 pts
+  let courtesy = { name:'Professionalism & Courtesy', max:30, score:0, good:[], bad:[] };
+  if (/rebuilt|thank.*for calling|good (morning|afternoon)|hi|hello/.test(agentText)) {
+    courtesy.score += 5; courtesy.good.push('Professional greeting');
+  }
+  if (/understand|i\'m sorry|apologize|sorry to hear|completely understand|no problem/.test(agentText)) {
+    courtesy.score += 8; courtesy.good.push('Empathetic and respectful response to DNC request');
+  } else { courtesy.bad.push('Should acknowledge the request respectfully — "I completely understand"'); }
+  if (/absolutely|of course|no problem|right away|happy to|will do/.test(agentText)) {
+    courtesy.score += 5; courtesy.good.push('Willing and accommodating tone');
+  }
+  if (!/argue|but |why not|are you sure|just hear|give.*chance|one more/.test(agentText)) {
+    courtesy.score += 7; courtesy.good.push('Did not push back or argue with DNC request');
+  } else { courtesy.bad.push('Pushed back on DNC request — never argue, just comply politely'); }
+  if (/thank|appreciate|have a (good|great|nice) (day|one)|take care/.test(agentText)) {
+    courtesy.score += 5; courtesy.good.push('Professional closing');
+  }
+  categories.push(courtesy);
+
+  // 2. ADDRESS VERIFICATION — 40 pts
+  let address = { name:'Address Verification', max:40, score:0, good:[], bad:[] };
+  if (/address|property|which (home|house|property)|confirm.*address|what address|which.*address|verify.*address/.test(agentText)) {
+    address.score += 15; address.good.push('Asked to confirm the address to remove');
+  } else { address.bad.push('Must confirm the exact address — "Can I confirm the address you\'d like removed?"'); }
+  if (/correct|right|yes|that.*one|that.*address|on file/.test(callerText) && /address/.test(agentText)) {
+    address.score += 10; address.good.push('Seller confirmed the address');
+  }
+  if (/any other|other propert|multiple|more than one|additional/.test(agentText)) {
+    address.score += 10; address.good.push('Asked about additional properties to remove');
+  }
+  if (/list|mail|mailing|remove.*from|take.*off|our (records|system|list)/.test(agentText)) {
+    address.score += 5; address.good.push('Confirmed removal from mailing list');
+  }
+  categories.push(address);
+
+  // 3. COMPLIANCE & PROCESS — 30 pts
+  let compliance = { name:'Compliance & Process', max:30, score:0, good:[], bad:[] };
+  if (/remov|take.*off|mark|update|note|flag|system|our (end|records)/.test(agentText)) {
+    compliance.score += 10; compliance.good.push('Confirmed the removal action will be taken');
+  } else { compliance.bad.push('Should confirm: "I\'ll get that removed from our system right away"'); }
+  if (/take.*a few|may.*receive|already.*in.*mail|pipeline|in transit/.test(agentText)) {
+    compliance.score += 8; compliance.good.push('Set expectation about mail already in pipeline');
+  }
+  if (!/offer|price|sell|what.*property.*worth|buy|we.*pay/.test(agentText)) {
+    compliance.score += 7; compliance.good.push('Did not try to pivot into a sales pitch');
+  } else { compliance.bad.push('Attempted to sell on a DNC call — never pitch after a removal request'); }
+  if (call.duration <= 180) {
+    compliance.score += 5; compliance.good.push('Appropriate call length for DNC');
+  }
+  categories.push(compliance);
+
+  // SCORING
+  const totalScore = categories.reduce((s,c) => s + c.score, 0);
+  const totalMax = categories.reduce((s,c) => s + c.max, 0);
+  const pct = Math.round((totalScore / totalMax) * 100);
+
+  let grade, gradeColor;
+  if (pct >= 90) { grade='A'; gradeColor='var(--green)'; }
+  else if (pct >= 80) { grade='B+'; gradeColor='var(--green)'; }
+  else if (pct >= 70) { grade='B'; gradeColor='var(--yellow)'; }
+  else if (pct >= 60) { grade='B-'; gradeColor='var(--yellow)'; }
+  else if (pct >= 50) { grade='C+'; gradeColor='var(--orange)'; }
+  else if (pct >= 40) { grade='C'; gradeColor='var(--orange)'; }
+  else if (pct >= 30) { grade='D'; gradeColor='var(--red)'; }
+  else { grade='F'; gradeColor='var(--red)'; }
+
+  return { categories, totalScore, totalMax, pct, grade, gradeColor, callType: 'DNC' };
+}
+
 function analyzeZoomCall(call, lines, agentText, callerText, allText) {
   const categories = [];
   const dur = call.duration || 0;
@@ -1245,15 +1575,18 @@ function renderDetail(call) {
           <span style="color:${call.source_system === 'zoom_phone' ? 'var(--purple)' : 'var(--accent)'}">${call.source_system === 'zoom_phone' ? 'Zoom Phone' : 'CallRail'}</span>
           ${call.agent_name ? `<span style="color:var(--purple)">Agent: ${call.agent_name}</span>` : ''}
           ${call.direction ? `<span>${call.direction === 'inbound' ? 'Inbound' : 'Outbound'}</span>` : ''}
+          ${call.prospect_address ? `<span title="${call.prospect_address}">${call.prospect_address.length > 40 ? call.prospect_address.slice(0,40)+'...' : call.prospect_address}</span>` : ''}
         </div>
+        ${call.prospect_id ? `<div style="margin-top:8px;"><a href="https://m.rebuilt.com/acquisitions/prospects/${call.prospect_id}" target="_blank" rel="noopener" style="color:var(--accent);font-size:13px;text-decoration:none;">View Prospect &rarr;</a></div>` : ''}
       </div>
+      ${call.recording ? `<div style="margin-bottom:16px;"><audio controls preload="none" style="width:100%;border-radius:8px;" src="${call.recording}"></audio></div>` : ''}
       ${call.call_summary ? `<div class="summary-box"><strong>Summary:</strong> ${call.call_summary}</div>` : ''}
       ${transcriptHTML}
     </div>
     <div class="analysis-panel">
       <div class="detail-header">
         <h2>Call Coaching & Grade</h2>
-        ${analysis.zoomType ? `<div style="color:var(--purple);font-size:12px;margin-top:4px;">Type: ${analysis.zoomType.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div>` : ''}
+        ${(analysis.zoomType || analysis.callType) ? `<div style="color:var(--purple);font-size:12px;margin-top:4px;">Type: ${(analysis.zoomType || analysis.callType).replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div>` : ''}
       </div>
       <div class="grade-ring">
         <svg width="100" height="100">

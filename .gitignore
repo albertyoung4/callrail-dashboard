@@ -1,2 +1,4 @@
 node_modules/
 .DS_Store
+zoom-tokens.json
+user-lookup.json

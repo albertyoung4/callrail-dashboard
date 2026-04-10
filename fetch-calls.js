@@ -1,13 +1,15 @@
 #!/usr/bin/env node
+// Fetch CallRail calls and enrich with Five9 agent data + user roles from user-lookup.json
 
 const API_KEY = process.env.CALLRAIL_API_KEY || '423a387918c39793960b61d688bed5cc';
 const ACCOUNT_ID = 'ACC925c6f152a33426b9f3767406aab6621';
 const BASE_URL = `https://api.callrail.com/v3/a/${ACCOUNT_ID}`;
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
 const MERGE_MODE = process.argv.includes('--merge');
+const LOOKUP_FILE = path.join(__dirname, 'user-lookup.json');
+const OUTPUT_FILE = path.join(__dirname, 'calls.json');
 
 const FIELDS = [
   'duration', 'start_time', 'direction', 'customer_phone_number', 'customer_name',
@@ -16,70 +18,50 @@ const FIELDS = [
   'formatted_duration', 'customer_city', 'customer_state', 'agent_email'
 ].join(',');
 
-const PG_CONN = "host=192.168.0.229 port=5432 dbname=rebuilt_prod user=postgres";
-const PG_PASS = 'XvcfdCh6M5QeeVn8bWGcBjXeSmrRqXcs';
-
-function fetchFive9Agents() {
-  console.log('Fetching Five9 agent data from database...');
+function loadLookup() {
   try {
-    const sql = `
-      SELECT ani, agent_email, disposition, call_timestamp
-      FROM salmar.five9_call_data
-      WHERE agent IS NOT NULL AND agent != '[None]'
-        AND agent_email IS NOT NULL AND agent_email != ''
-        AND talk_time > '00:01:00'
-        AND call_date >= CURRENT_DATE - INTERVAL '90 days'
-    `;
-    const result = execSync(
-      `PGPASSWORD='${PG_PASS}' /opt/homebrew/bin/psql "${PG_CONN}" -t -A -F '|' -c "${sql.replace(/\n/g, ' ')}"`,
-      { encoding: 'utf-8', timeout: 60000, maxBuffer: 50 * 1024 * 1024 }
-    );
-
-    // Build lookup: caller phone (last 10 digits) -> { agent, agent_email, disposition }
-    // Use the most recent match per phone number + approximate time
-    const lookup = {};
-    for (const line of result.trim().split('\n')) {
-      if (!line) continue;
-      const [ani, agentEmail, disposition, timestamp] = line.split('|');
-      if (!ani || ani.length < 10) continue;
-      const phone = ani.slice(-10);
-      // Store all entries keyed by phone, we'll match by closest timestamp later
-      if (!lookup[phone]) lookup[phone] = [];
-      lookup[phone].push({ agentEmail, disposition, timestamp });
-    }
-    console.log(`  Loaded ${Object.keys(lookup).length} unique phone numbers from Five9`);
-    return lookup;
+    const data = JSON.parse(fs.readFileSync(LOOKUP_FILE, 'utf-8'));
+    console.log(`Loaded user-lookup.json (${Object.keys(data.users).length} users, ${Object.keys(data.five9_phone_lookup).length} Five9 phones)`);
+    return data;
   } catch (err) {
-    console.warn('  Warning: Could not fetch Five9 data:', err.message);
-    return {};
+    console.warn('Warning: Could not load user-lookup.json:', err.message);
+    return { users: {}, five9_phone_lookup: {}, callrail_agent_lookup: {} };
   }
 }
 
-function matchAgent(five9Lookup, customerPhone, callTime) {
+function matchFive9(lookup, customerPhone, callTime) {
   if (!customerPhone) return null;
   const phone = customerPhone.replace(/\D/g, '').slice(-10);
-  const entries = five9Lookup[phone];
+  const entries = lookup.five9_phone_lookup[phone];
   if (!entries || entries.length === 0) return null;
 
-  // Find closest match by timestamp
   const callDate = new Date(callTime);
-  let best = null;
-  let bestDiff = Infinity;
+  let best = null, bestDiff = Infinity;
   for (const entry of entries) {
-    const diff = Math.abs(new Date(entry.timestamp) - callDate);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = entry;
-    }
+    const diff = Math.abs(new Date(entry.ts) - callDate);
+    if (diff < bestDiff) { bestDiff = diff; best = entry; }
   }
-  // Only match if within 1 hour
-  if (bestDiff < 3600000) return best;
-  return null;
+  return bestDiff < 3600000 ? best : null;
+}
+
+function resolveAgent(lookup, email) {
+  if (!email) return { name: '', role: '', department: '' };
+  const user = lookup.users[email];
+  if (user) return { name: user.name, role: user.role, department: user.department };
+  const name = email.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+  return { name, role: '', department: '' };
+}
+
+function matchProspect(lookup, customerPhone) {
+  if (!customerPhone || !lookup.prospect_phone_lookup) return null;
+  const phone = customerPhone.replace(/\D/g, '').slice(-10);
+  const prospects = lookup.prospect_phone_lookup[phone];
+  if (!prospects || prospects.length === 0) return null;
+  return prospects[0]; // Return first match (most relevant)
 }
 
 async function fetchAllCalls() {
-  // Fetch Five9 agent data first
-  const five9Lookup = fetchFive9Agents();
+  const lookup = loadLookup();
 
   let allCalls = [];
   let page = 1;
@@ -106,19 +88,28 @@ async function fetchAllCalls() {
     page++;
   }
 
-  // Filter to only calls with transcripts
   const withTranscripts = allCalls.filter(c => c.transcription && c.transcription.trim().length > 0);
   console.log(`\nTotal calls: ${allCalls.length}`);
   console.log(`Calls with transcripts: ${withTranscripts.length}`);
 
-  let matched = 0;
+  let five9Matched = 0, dbMatched = 0;
   const calls = withTranscripts.map(c => {
-    const five9 = matchAgent(five9Lookup, c.customer_phone_number, c.start_time);
-    if (five9) matched++;
-    const agentEmail = five9?.agentEmail || c.agent_email || '';
-    const agentName = agentEmail ? agentEmail.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ') : '';
+    // Priority 1: Five9 match by phone + timestamp
+    const five9 = matchFive9(lookup, c.customer_phone_number, c.start_time);
+    // Priority 2: CallRail agent_email from API
+    const agentEmail = five9?.email || c.agent_email || '';
+    if (five9) five9Matched++;
+
+    // Resolve agent name and department from user roles DB
+    const agent = resolveAgent(lookup, agentEmail);
+    if (agent.department) dbMatched++;
+
+    // Match prospect for address + prospect link
+    const prospect = matchProspect(lookup, c.customer_phone_number);
+
     return {
       id: c.id,
+      source_system: 'callrail',
       customer_name: (c.customer_name || '').trim(),
       customer_phone: c.customer_phone_number,
       customer_city: c.customer_city,
@@ -135,40 +126,40 @@ async function fetchAllCalls() {
       voicemail: c.voicemail,
       recording: c.recording,
       agent_email: agentEmail,
-      agent_name: agentName,
+      agent_name: agent.name,
+      agent_role: agent.role,
+      agent_department: agent.department,
       five9_disposition: five9?.disposition || '',
+      prospect_id: prospect?.prospect_id || '',
+      prospect_address: prospect?.address || '',
+      prospect_name: prospect?.name || '',
       transcript: c.transcription,
       call_summary: c.call_summary,
       note: c.note
     };
   });
 
-  console.log(`Five9 agent matched: ${matched}/${withTranscripts.length} calls`);
+  console.log(`Five9 matched: ${five9Matched}/${withTranscripts.length}`);
+  console.log(`DB role matched: ${dbMatched}/${withTranscripts.length}`);
 
-  // Merge mode: preserve Five9 agent data from existing calls.json for calls
-  // that were previously matched (useful when running from CI without DB access)
+  // Merge mode
   let finalCalls = calls;
-  const outPath = path.join(__dirname, 'calls.json');
-
-  if (MERGE_MODE && fs.existsSync(outPath)) {
+  if (MERGE_MODE && fs.existsSync(OUTPUT_FILE)) {
     console.log('\n--merge: Merging with existing calls.json...');
     try {
-      const existing = JSON.parse(fs.readFileSync(outPath, 'utf-8'));
+      const existing = JSON.parse(fs.readFileSync(OUTPUT_FILE, 'utf-8'));
       const existingMap = {};
-      for (const c of (existing.calls || [])) {
-        existingMap[c.id] = c;
-      }
+      for (const c of (existing.calls || [])) existingMap[c.id] = c;
       let preserved = 0;
       finalCalls = calls.map(c => {
         const prev = existingMap[c.id];
-        // If this call had Five9 data before but doesn't now, keep the old Five9 fields
         if (prev && prev.agent_name && !c.agent_name) {
           preserved++;
-          return { ...c, agent_email: prev.agent_email, agent_name: prev.agent_name, five9_disposition: prev.five9_disposition };
+          return { ...c, agent_email: prev.agent_email, agent_name: prev.agent_name, agent_role: prev.agent_role, agent_department: prev.agent_department, five9_disposition: prev.five9_disposition };
         }
         return c;
       });
-      console.log(`  Preserved Five9 agent data for ${preserved} calls`);
+      console.log(`  Preserved agent data for ${preserved} calls`);
     } catch (err) {
       console.warn('  Warning: Could not merge:', err.message);
     }
@@ -181,8 +172,8 @@ async function fetchAllCalls() {
     calls: finalCalls
   };
 
-  fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
-  console.log(`\nSaved to ${outPath}`);
+  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(output, null, 2));
+  console.log(`\nSaved ${finalCalls.length} calls to ${OUTPUT_FILE}`);
 }
 
 fetchAllCalls().catch(err => {

@@ -1,70 +1,61 @@
 #!/usr/bin/env node
 // Fetch Zoom Phone recordings with transcripts
 // Uses OAuth refresh token for automated access
+// Enriches with user-lookup.json for agent assignment + internal call detection
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
 const CLIENT_ID = process.env.ZOOM_CLIENT_ID || 'IjdncW6PTdOxoVfmvafXWw';
 const CLIENT_SECRET = process.env.ZOOM_CLIENT_SECRET || 'dAA8i28TRUq3SAYsnd8sSxwv2XUnrTry';
 const TOKEN_FILE = path.join(__dirname, 'zoom-tokens.json');
 const OUTPUT_FILE = path.join(__dirname, 'zoom-calls.json');
+const LOOKUP_FILE = path.join(__dirname, 'user-lookup.json');
 const MERGE_MODE = process.argv.includes('--merge');
 
 // How many days back to fetch (default 30)
 const DAYS_BACK = parseInt(process.env.ZOOM_DAYS || '30', 10);
 
-const PG_CONN = "host=192.168.0.229 port=5432 dbname=rebuilt_prod user=postgres";
-const PG_PASS = 'XvcfdCh6M5QeeVn8bWGcBjXeSmrRqXcs';
-
-function fetchZoomDbLookup() {
-  console.log('Fetching Zoom call data from database for enrichment...');
+function loadLookup() {
   try {
-    const sql = `
-      SELECT caller_number, callee_number, direction, department, result, date_time
-      FROM salmar.zoom_call_logs
-      WHERE date_time >= NOW() - INTERVAL '${DAYS_BACK} days'
-        AND duration > 60
-        AND department IS NOT NULL AND department != ''
-    `;
-    const result = execSync(
-      `PGPASSWORD='${PG_PASS}' /opt/homebrew/bin/psql "${PG_CONN}" -t -A -F '|' -c "${sql.replace(/\n/g, ' ')}"`,
-      { encoding: 'utf-8', timeout: 60000, maxBuffer: 50 * 1024 * 1024 }
-    );
-
-    const lookup = {};
-    for (const line of result.trim().split('\n')) {
-      if (!line) continue;
-      const [callerNum, calleeNum, dir, dept, callResult, dateTime] = line.split('|');
-      // Key by caller+callee phone combo for matching
-      const key = (callerNum || '').replace(/\D/g, '').slice(-10) + '_' + (calleeNum || '').replace(/\D/g, '').slice(-10);
-      if (!lookup[key]) lookup[key] = [];
-      lookup[key].push({ agentEmail: dept, result: callResult, timestamp: dateTime });
-    }
-    console.log(`  Loaded ${Object.keys(lookup).length} unique call pairs from zoom_call_logs`);
-    return lookup;
+    const data = JSON.parse(fs.readFileSync(LOOKUP_FILE, 'utf-8'));
+    console.log(`Loaded user-lookup.json (${Object.keys(data.users).length} users, ${Object.keys(data.zoom_call_lookup).length} Zoom call pairs)`);
+    return data;
   } catch (err) {
-    console.warn('  Warning: Could not fetch Zoom DB data:', err.message);
-    return {};
+    console.warn('Warning: Could not load user-lookup.json:', err.message);
+    return { users: {}, zoom_call_lookup: {} };
   }
 }
 
-function matchZoomDb(dbLookup, rec) {
-  if (!dbLookup || Object.keys(dbLookup).length === 0) return null;
+function matchZoomDb(lookup, rec) {
   const callerPhone = (rec.caller_number || '').replace(/\D/g, '').slice(-10);
   const calleePhone = (rec.callee_number || '').replace(/\D/g, '').slice(-10);
   const key = callerPhone + '_' + calleePhone;
-  const entries = dbLookup[key];
+  const entries = lookup.zoom_call_lookup[key];
   if (!entries) return null;
 
   const callDate = new Date(rec.date_time);
   let best = null, bestDiff = Infinity;
   for (const e of entries) {
-    const diff = Math.abs(new Date(e.timestamp) - callDate);
+    const diff = Math.abs(new Date(e.ts) - callDate);
     if (diff < bestDiff) { bestDiff = diff; best = e; }
   }
   return bestDiff < 3600000 ? best : null;
+}
+
+function resolveAgent(lookup, email) {
+  if (!email) return { name: '', role: '', department: '' };
+  const user = lookup.users[email];
+  if (user) return { name: user.name, role: user.role, department: user.department };
+  const name = email.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+  return { name, role: '', department: '' };
+}
+
+function matchProspect(lookup, phone) {
+  if (!phone || !lookup.prospect_phone_lookup) return null;
+  const norm = phone.replace(/\D/g, '').slice(-10);
+  const prospects = lookup.prospect_phone_lookup[norm];
+  return prospects && prospects.length > 0 ? prospects[0] : null;
 }
 
 async function refreshToken() {
@@ -82,7 +73,6 @@ async function refreshToken() {
   const data = await res.json();
   if (data.error) {
     console.error('Token refresh failed:', data);
-    // Try using existing token if it might still be valid
     return tokens.access_token;
   }
 
@@ -104,7 +94,6 @@ function formatDate(d) {
 }
 
 function parseZoomTranscript(timeline) {
-  // Convert Zoom timeline JSON to "Speaker: text" format matching CallRail
   if (!timeline || !Array.isArray(timeline)) return '';
   return timeline.map(entry => {
     const speaker = entry.users?.[0]?.username || 'Unknown';
@@ -172,8 +161,8 @@ async function fetchTranscript(recording, token) {
 }
 
 async function main() {
-  // Fetch DB enrichment data
-  const dbLookup = fetchZoomDbLookup();
+  // Load user lookup for agent assignment
+  const lookup = loadLookup();
 
   console.log('Refreshing Zoom token...');
   const token = await refreshToken();
@@ -197,17 +186,18 @@ async function main() {
     const transcript = parseZoomTranscript(timeline);
     if (!transcript) continue;
 
-    // Determine agent vs caller
-    const ownerName = rec.owner?.name || '';
-    const ownerExt = rec.owner?.extension_number?.toString() || '';
+    // Match to DB for agent email + internal flag
+    const dbMatch = matchZoomDb(lookup, rec);
+    const ownerEmail = rec.owner?.email || '';
+    const agentEmail = dbMatch?.email || ownerEmail;
+    const isInternal = dbMatch?.internal || false;
 
-    // Enrich from DB
-    const dbMatch = matchZoomDb(dbLookup, rec);
-    let agentEmail = dbMatch?.agentEmail || '';
-    let agentName = ownerName;
-    if (agentEmail && !agentName) {
-      agentName = agentEmail.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
-    }
+    // Resolve agent from user roles (try DB match email, then owner email)
+    const ownerName = rec.owner?.name || '';
+    let agent = resolveAgent(lookup, dbMatch?.email || '');
+    if (!agent.role && ownerEmail) agent = resolveAgent(lookup, ownerEmail);
+    const agentName = agent.name || ownerName;
+    const ownerExt = rec.owner?.extension_number?.toString() || '';
 
     calls.push({
       id: 'zoom_' + rec.id,
@@ -229,8 +219,14 @@ async function main() {
       recording: rec.download_url || '',
       agent_email: agentEmail,
       agent_name: agentName,
+      agent_role: agent.role,
+      agent_department: agent.department,
       five9_disposition: '',
+      prospect_id: (matchProspect(lookup, rec.direction === 'inbound' ? rec.caller_number : rec.callee_number))?.prospect_id || '',
+      prospect_address: (matchProspect(lookup, rec.direction === 'inbound' ? rec.caller_number : rec.callee_number))?.address || '',
+      prospect_name: (matchProspect(lookup, rec.direction === 'inbound' ? rec.caller_number : rec.callee_number))?.name || '',
       zoom_result: dbMatch?.result || '',
+      internal: isInternal,
       transcript: transcript,
       call_summary: '',
       note: '',
@@ -244,6 +240,7 @@ async function main() {
   }
 
   console.log(`\nCalls with transcripts: ${calls.length}`);
+  console.log(`Internal calls: ${calls.filter(c => c.internal).length}`);
 
   // Merge mode
   let finalCalls = calls;
